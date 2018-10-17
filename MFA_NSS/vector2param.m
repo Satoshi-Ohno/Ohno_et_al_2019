@@ -1,5 +1,5 @@
-function    [knotFluxes, initConcs, knotConcRates, knots, coefCorrCompt] = ...
-    vector2param170807(param, model, expData, optionsMFA)
+function    [switchTimeFluxes, initConcs, switchTimeConcRates, switchTimes] = ...
+    vector2param(param, model, expData, optionsMFA)
 
 
 field2var(optionsMFA.varSet)
@@ -7,23 +7,19 @@ field2var(optionsMFA.varSet)
         idParam =optionsMFA.idParamLocal;
 convertMat = optionsMFA.convertMat;
 
-%% knot time
-knots = param(idParam.knots);
-knots = sort(knots);
-% fullKnots = [0, knots', expData.time(end)];
+%% switch time
+switchTimes = param(idParam.switchTimes);
+switchTimes = sort(switchTimes);
 
-%% coefCorrCompt
-coefCorrCompt = param(idParam.coefCorrCompt);
-
-%% flux at knot time
-knotFluxes = convertMat.param2Flux * param;
-knotFluxes = reshape(knotFluxes, nRxns, nKnots+2);
+%% flux at switch time
+switchTimeFluxes = convertMat.param2Flux * param;
+switchTimeFluxes = reshape(switchTimeFluxes, nRxns, nSwitchTimes+2);
 
 %% initial metabolite concentrations
 initConcs = convertMat.param2InitConc * param;
 
-%% change in metabolite concentrations at knot time
-knotConcRates = convertMat.param2ConcRate * param;
-knotConcRates = reshape(knotConcRates, nNonPoolMets, nKnots+2);
+%% change in metabolite concentrations at switch time
+switchTimeConcRates = convertMat.param2ConcRate * param;
+switchTimeConcRates = reshape(switchTimeConcRates, nNonPoolMets, nSwitchTimes+2);
 
 end

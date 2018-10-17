@@ -1,17 +1,13 @@
 %% Simulate MDV
 function [score, scoreMet, sol, residual] = ...
-    solveMDVDynamics171206(paramVector, model, expData, optionsMFA, optimType, scoreInfeasible)
-% function [score, scoreMet, MDVsSim, timeSim, concs, nExpData, isCompMat] = ...
-%     solveMDVDynamics160421(model, expData, paramVector, optionsMFA)
-% IDV*dC/dt + C*dIDV/dt = ƒ°S*v*IMM*IDV_i' - ƒ°(-S*v*IDV_i)
-% MDV = ICM * IDV
-% 
+    solveMDVDynamics(paramVector, model, expData, optionsMFA, optimType)
+
 warning off
 field2var(optionsMFA.varSet)
 idParamLocal = optionsMFA.idParamLocal;
 nParamLocal = idParamLocal.nParam;
 if nargin<=5
-    scoreInfeasible = 10^12;
+    scoreInfeasible = nan;
 end
 
 %% Prepare return values
@@ -23,25 +19,25 @@ if isfield(expData, 'nExpData')
     residual = zeros(expData.nExpData,1) + sqrt(score/expData.nExpData);
 end
 
-%% Check difference between knot times
+%% Check difference between switch times
 switch optimType
     case {'local'}
         idParam = optionsMFA.idParamLocal;
         isInParams = false(1,idParam.nParam);
-        isInParams(idParam.knots) = true;
+        isInParams(idParam.switchTimes) = true;
         isInParams = isInParams(optionsMFA.isIndParams.local);
-        knots = paramVector(isInParams);
+        switchTimes = paramVector(isInParams);
         
     case {'metaheuristic', 'init'}
         idParam = optionsMFA.idParamMH;
         isInParams = false(1,idParam.nParam);
-        isInParams(idParam.knots) = true;
+        isInParams(idParam.switchTimes) = true;
         isInParams = isInParams(optionsMFA.isIndParams.MH);
-        knots = 10.^paramVector(isInParams);        
+        switchTimes = 10.^paramVector(isInParams);        
 end
 
-fullKnots = [0, knots', expData.time(end)];
-if any(diff(fullKnots) < optionsMFA.minKnotTimeDiff)
+fullSwitchTimes = [0, switchTimes', expData.time(end)];
+if any(diff(fullSwitchTimes) < optionsMFA.minKnotTimeDiff)
     return
 end
 
@@ -61,14 +57,14 @@ optionsMFA.convertMat = convertMat;
 
 %% Flux
 fxnVector2param = str2func(optionsMFA.fxnName.vector2param);
-[knotFluxes, initConcs, knotConcRates, knots, coefCorrCompt] = ...
+[switchTimeFluxes, initConcs, switchTimeConcRates, switchTimes] = ...
     fxnVector2param(paramLocal, model, expData, optionsMFA);
-if isempty(knotFluxes)
+if isempty(switchTimeFluxes)
     return
 end
 
-if any(any(knotFluxes < optionsMFA.lbLocal.knotFluxesAll*(1-10^-3)))|| ...
-        any(any(knotFluxes > optionsMFA.ubLocal.knotFluxesAll*(1+10^-3)))
+if any(any(switchTimeFluxes < optionsMFA.lbLocal.switchTimeFluxesAll*(1-10^-3)))|| ...
+        any(any(switchTimeFluxes > optionsMFA.ubLocal.switchTimeFluxesAll*(1+10^-3)))
     return
 end
 
@@ -90,21 +86,21 @@ initConcsAns = convertMat.param2InitConc * paramLocal;
 
 %% polynomial coefficient of metabolite concetnrations
 pCoefConcs = convertMat.param2pCoefConc*paramLocal;
-pCoefConcs = reshape(pCoefConcs, nNonPoolMets, 3*(nKnots+1));
+pCoefConcs = reshape(pCoefConcs, nNonPoolMets, 3*(nSwitchTimes+1));
 
 
 %% polynomial coefficient of flux
 
 pCoefFluxes = convertMat.param2pCoefFlux * paramLocal;
-pCoefFluxes = reshape(pCoefFluxes,nRxns, 2*(nKnots+1));
+pCoefFluxes = reshape(pCoefFluxes,nRxns, 2*(nSwitchTimes+1));
 
 
 %% Prepare EMU simulation
-for k = 1 : nKnots + 1
-    if nKnots == 0
-        timeSpan = fullKnots;
+for k = 1 : nSwitchTimes + 1
+    if nSwitchTimes == 0
+        timeSpan = fullSwitchTimes;
     else
-        timeSpan = [fullKnots(k), fullKnots(k+1)];
+        timeSpan = [fullSwitchTimes(k), fullSwitchTimes(k+1)];
     end
     isExpTimeInTimeSpan = expData.time>=timeSpan(1) & expData.time<=timeSpan(end);
     timeSpan = sort(unique([timeSpan, expData.time(isExpTimeInTimeSpan)]));
@@ -122,8 +118,8 @@ for k = 1 : nKnots + 1
         querryTime = sort(unique([querryTime, timeSpan(2:end-1)]));
     end
     
-    tmpParamStruct.knotFluxes = knotFluxes(:,k+(0:1));
-    tmpParamStruct.knots = knots;
+    tmpParamStruct.switchTimeFluxes = switchTimeFluxes(:,k+(0:1));
+    tmpParamStruct.switchTimes = switchTimes;
     tmpParamStruct.pCoefConcs = pCoefConcs(:, (k-1)*3+(1:3));
     tmpParamStruct.pCoefFluxes = pCoefFluxes(:, (k-1)*2+(1:2));
     tmpParamStruct.querryTime= querryTime;
@@ -138,10 +134,10 @@ end
 
 
 %% Simulate EMU
-nTimeSim = zeros(1,nKnots+1);
+nTimeSim = zeros(1,nSwitchTimes+1);
 
 fxnSoveEMUDynamics = str2func(optionsMFA.fxnName.solveEMUDynamics);
-for k = 1 : nKnots + 1
+for k = 1 : nSwitchTimes + 1
     try
         if k == 1
             output(k) = fxnSoveEMUDynamics(paramStruct(k), model, expData, optionsMFA, []);
@@ -168,8 +164,8 @@ end
 
 MDVsSim = cell(nNonPoolMets, 1);
 for m = 1 : nMets
-        tmpMDVsSim = cell(1,nKnots+1);
-        for k = 1:nKnots+1
+        tmpMDVsSim = cell(1,nSwitchTimes+1);
+        for k = 1:nSwitchTimes+1
             tmpMDVsSim(k) = output(k).MDVsSim(m);
         end
         MDVsSim{m} = [tmpMDVsSim{:}];
@@ -197,29 +193,22 @@ else
 end
 concs = [output.concs];
 
-concMDVs = cell(size(MDVsSim));
-for m = 1 : nNonPoolMets
-        concMDVs{m} = MDVsSim{m} .* repmat(concs(m,:),size(MDVsSim{m},1),1);
-        concMDVs{m} = single(concMDVs{m});
-end
+% concMDVs = cell(size(MDVsSim));
+% for m = 1 : nNonPoolMets
+%         concMDVs{m} = MDVsSim{m} .* repmat(concs(m,:),size(MDVsSim{m},1),1);
+%         concMDVs{m} = single(concMDVs{m});
+% end
 
-sol.knotFluxes = knotFluxes;
-sol.netFluxes = model.matRaw2Net*knotFluxes; 
-sol.knots = knots;
+sol.switchTimeFluxes = switchTimeFluxes;
+sol.netFluxes = model.matRaw2Net*switchTimeFluxes; 
+sol.switchTimes = switchTimes;
 sol.MDVsSim = MDVsSim;
 sol.concs = single(concs);
-sol.concMDVs = concMDVs;
+% sol.concMDVs = concMDVs;
 sol.initConcs = initConcs;
-sol.knotConcRates = knotConcRates;
+sol.switchTimeConcRates = switchTimeConcRates;
 sol.pCoefConcs = pCoefConcs;
 sol.timeSim = timeSim;
-
-if ~isempty(idComptCorrParam)
-    sol.coefCorrCompt = coefCorrCompt;
-else
-        mediaInfo = optionsMFA.mediaInfo;
-        sol.coefCorrCompt = 1/mediaInfo.mediaVol*mediaInfo.cellAmount;
-end
 
 %% RSS
 [score, scoreMet, residual, resVec2MDV]= calcScore(model, expData, optionsMFA, sol);

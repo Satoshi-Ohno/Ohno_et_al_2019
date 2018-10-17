@@ -36,31 +36,19 @@ while p <= initPopSize
     
     tmpParamMH = zeros(nParamMH, 1);
 
-    %% Initial knot time and coefCorrCompt
-    % knot time
-    log10Range = log10(ubInit.knots)-log10(lbInit.knots);
+    %% Initial switch time 
+    % switch time
+    log10Range = log10(ubInit.switchTimes)-log10(lbInit.switchTimes);
     while true
-        knots = 10.^(log10Range.*rand(nKnots, 1)+log10(lbInit.knots));
-        knots = sort(knots);
-        fullKnots = [0, knots', expData.time(end)];
-        if all(diff(fullKnots) >= optionsMFA.minKnotTimeDiff)
+        switchTimes = 10.^(log10Range.*rand(nSwitchTimes, 1)+log10(lbInit.switchTimes));
+        switchTimes = sort(switchTimes);
+        fullSwitchTimes = [0, switchTimes', expData.time(end)];
+        if all(diff(fullSwitchTimes) >= optionsMFA.minKnotTimeDiff)
             break
         end
     end
-
-    % coefCorrCompt
-    if ~isempty(idComptCorrParam)
-        log10Range = log10(ubInit.coefCorrCompt)-log10(lbInit.coefCorrCompt);
-        coefCorrCompt = 10.^(log10Range.*rand(nComptCorrParam, 1)+log10(lbInit.coefCorrCompt));
-    else
-        mediaInfo = optionsMFA.mediaInfo;
-        coefCorrCompt = 1/mediaInfo.mediaVol*mediaInfo.cellAmount;
-    end
     
-    tmpParamMH(idParamMH.knots) = log10(knots);
-    if ~isempty(idParamMH.coefCorrCompt)
-        tmpParamMH(idParamMH.coefCorrCompt) = log10(coefCorrCompt);
-    end
+    tmpParamMH(idParamMH.switchTimes) = log10(switchTimes);
     
     %% Make QP model
     isInputIndVars = false;

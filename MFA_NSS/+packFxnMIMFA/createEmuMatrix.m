@@ -1,12 +1,5 @@
+%% Make a matrix to simulate dynamics of EMU
 function model = createEmuMatrix161129(model, optionsMFA)
-%createEmuMatrix EMUの時間変化を決める行列を作成
-% dX/dt = {(A - S'・v)X + B・Y}/C 
-% X: 未知EMU
-% Y: 既知EMU
-% S': 化学量論行列（ただし、EMUの代謝物に関するもののみ）
-% A, B: フラックスに依存して決まる行列
-%   A = A'1*v1 + A'2*v2 + A'3*v3 + ...
-%   A = B'1*v1 + B'2*v2 + B'3*v3 + ...
 
 [~, nRxns] = size(model.S);
 emuNetwork = model.emuNetwork;
@@ -17,17 +10,13 @@ for s = 1 : length(emuNetwork)
     if isempty(emuList)
         continue
     end
-%     if isempty(emuRxns)
-%         continue
-%     end
     
-    %% 複数のEmuから合成される場合について処理
     synsEmuList = [];
     nSynsEmu = 0;
     if isempty(emuRxns)
         prodEmu = [];
         subsEmu = [];
-        emu = {emuList([emuList.size]==s).name}; %Pyr+CO2-->OAA追加時のバグ解消
+        emu = {emuList([emuList.size]==s).name}; 
     else
         for j = 1 : length(emuRxns)
             if length(emuRxns(j).subsEmu) > 1
@@ -44,12 +33,10 @@ for s = 1 : length(emuNetwork)
         
         prodEmu = [emuRxns.prodEmu];
         subsEmu = [emuRxns.subsEmu];
-        emu = union({emuList([emuList.size]==s).name},unique([subsEmu, prodEmu])); %Pyr+CO2-->OAA追加時のバグ解消
+        emu = union({emuList([emuList.size]==s).name},unique([subsEmu, prodEmu])); 
     end
-%     emu1 = union({emuList([emuList.size]==s).name},unique([subsEmu, prodEmu]));
-%     emu2 = unique([subsEmu, prodEmu]);
     
-    %% 未知のEmu→既知のEmuの順に並べ替え
+    %% order EMU 
     isKnownEmu = [emuList.isKnownEmu];
     unknownEmu = intersect(emu,{emuList(~isKnownEmu).name});
     knownEmu = setdiff(emu, unknownEmu);
@@ -67,7 +54,7 @@ for s = 1 : length(emuNetwork)
     end
     isSingleEmu = ~isNotSingleEmu';
     
-    %% AとBの作成
+    %% make matrix A and B
     for j =  1 : nRxns
         if isempty(emuRxns)
             emuNetwork(s).arrayMakeA.array{j} =[];
@@ -78,13 +65,10 @@ for s = 1 : length(emuNetwork)
             if ~ isempty(idEmuRxns)
                 prodEmus =  [emuRxns(idEmuRxns).prodEmu];
                 subsEmus = [emuRxns(idEmuRxns).subsEmu];
-                %             idr = find(ismember(emu, prodEmus));
-                %             idc =  find(ismember(emu, subsEmus));
                 for k = 1 : length(prodEmus)
                     idr = find(strcmp(prodEmus(k), emu));
                     idc = find(strcmp(subsEmus(k), emu));
                     tmpArray(idr,idc) = tmpArray(idr,idc) +emuRxns(idEmuRxns(k)).prodEmuCoef;
-                    %                 tmpArray(idr,idc) = tmpArray(idr,idc) +1;
                 end
             end
             idConsMet = find(model.Ssubs(:,j)<0);
@@ -95,7 +79,7 @@ for s = 1 : length(emuNetwork)
                 if any(isConsUnkEmu)
                     id = find(isConsUnkEmu);
                     for k = 1 : length(id)
-                        tmpArray(id(k),id(k)) = tmpArray(id(k),id(k))+coefs(l);  %おそらくこれでよいのではないでしょうか？
+                        tmpArray(id(k),id(k)) = tmpArray(id(k),id(k))+coefs(l);  
                     end
                 end
             end
@@ -126,12 +110,12 @@ for s = 1 : length(emuNetwork)
     emuNetwork(s).arrayMakeB.isSingleEmu = isSingleEmu;
     emuNetwork(s).arrayMakeB.sizeEmu = knownEmuSize;
     
-    %% Sのうち、Emuが由来する代謝物についてのみ抜き出す。
+    %% Stoichiometric matrix for EMU
     [~,idEmuList] = ismember(unknownEmu, {emuList.name});
     [~, idMet] = ismember({emuList(idEmuList).met}, model.mets);
     emuNetwork(s).emuS = model.S(idMet,:);
     
-    %% 文字式のA, Bを作成 (確認用)
+    %% formula of matrix A and B (for check)
     cellArrayA = cell(nUnkEmu);
     cellArrayB = cell(nUnkEmu,nKnownEmu);
     for j =  1 : nRxns
@@ -171,8 +155,6 @@ for s = 1 : length(emuNetwork)
             cellArrayB{id(k)} = [cellArrayB{id(k)} coef  'v' num2str(j)];
         end
     end
-%     emuNetwork(i).arrayMakeA.cellArrayA=cellArrayA;
-%     emuNetwork(i).arrayMakeB.cellArrayB=cellArrayB;
 
 model.emuNetwork= emuNetwork;
 end

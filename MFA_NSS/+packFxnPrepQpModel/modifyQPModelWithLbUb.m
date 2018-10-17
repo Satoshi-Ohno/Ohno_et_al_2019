@@ -1,17 +1,15 @@
+%% Add constraints for lower and upper bounds of variables
 function qpModel = modifyQPModelWithLbUb180116(model, expData, optionsMFA, qpModel, Cx, C0)
-%% lb, ub‚ğÁ‚µ‚ÄA or Aeq‚ÉŠÜ‚ß‚é
 if isempty(qpModel.lb) 
     return
 end
 
 [nParam] = length(qpModel.q);
 
-% Aeq‚ÉŠÜ‚ß‚é‚à‚Ì‚Ì“¯’è
 maxVal = max(abs([qpModel.lb, qpModel.ub]), [], 2);
 isEqBound = qpModel.ub- qpModel.lb<=maxVal*0.01;
 nEqBound = nnz(isEqBound);
 nNonEqBound = nnz(~isEqBound);
-% keyboard;
 
 tmpAeq = sparse(nEqBound, nParam);
 tmpAeq(:,isEqBound) = tmpAeq(:,isEqBound)+ eye(nEqBound);

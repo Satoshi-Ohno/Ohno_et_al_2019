@@ -1,24 +1,23 @@
+%% Make net flux information
 function model = makeNetFluxInfo170821(model, optionsMFA)
 
-% raw fluxからnet fluxの計算
 [nMets, nRxns] = size(model.S);
 revSets=model.rxnInfo.revSets;
 
-%% 可逆反応の同定
+%% Identification of reversible reactions
 idRxns = (1:nRxns)';
 idNonRevRxns = idRxns(revSets == 0);
 [~,idUnqRevRxns] = unique(revSets);
 idNetRxns = sort([idNonRevRxns;idUnqRevRxns(2:end)]);
 nNetRxns = length(idNetRxns);
 
-%% 反応リストの作成
-% 化学量論行列から反応式を再構成
+%%  Make reaction list
 netS = model.S(:, idNetRxns);
 isRev = revSets(idNetRxns) > 0;
 netRxns = Smatrix2rxns(netS, model.mets, isRev);
 netRxnNames = model.rxnNames(idNetRxns);
 
-%% raw flux -> net fluxへの変換行列の作成
+%% Make matrix to convert raw flux to net flux
 corrRatio = zeros(nNetRxns,1)+1;
 matRaw2Net = zeros(nNetRxns, nRxns+1);
 
@@ -31,7 +30,7 @@ matRaw2Net(ismember(idNetRxns, idNonRevRxns), idNonRevRxns+1) = ...
 matRaw2Net = matRaw2Net(:,1:nRxns);
 matRaw2Net = matRaw2Net .* repmat(corrRatio, 1, nRxns); % 補正リストに従ってフラックスを修正
 
-%% 結果の保存
+%% 
 model.netRxns = netRxns;
 model.netRxnNames = netRxnNames;
 model.idNetRxns = idNetRxns;
@@ -39,7 +38,7 @@ model.matRaw2Net = matRaw2Net;
 
 end
 
-%% 化学量論行列から反応式リストの作成
+%% Make reaction formula from stoichiometric matrix
 function rxns = Smatrix2rxns(S, mets, isRev)
 
 [nMets, nRxns] = size(S);

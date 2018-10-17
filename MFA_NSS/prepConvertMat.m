@@ -15,24 +15,24 @@ col =  optionsMFA.idParamLocal.initConcs;
 matParam2InitConc(row, col) = matParam2InitConc(row, col) + eye(nNonPoolMets);
 
 %% param -> concRate
-matParam2ConcRate = sparse(nNonPoolMets*(nKnots+2), nParamLocal);
-for k = 1 : nKnots+2
+matParam2ConcRate = sparse(nNonPoolMets*(nSwitchTimes+2), nParamLocal);
+for k = 1 : nSwitchTimes+2
     row = nNonPoolMets*(k-1)+(1:nNonPoolMets);
-    col =  idParamLocal.knotConcRates(nNonPoolMets*(k-1)+(1:nNonPoolMets));
+    col =  idParamLocal.switchTimeConcRates(nNonPoolMets*(k-1)+(1:nNonPoolMets));
     matParam2ConcRate(row, col) = matParam2ConcRate(row, col) + eye(nNonPoolMets);
 end
 
 %% param -> indFlux
-matParam2IndFlux = sparse(nIndFluxes*(nKnots+2), nParamLocal);
-for k = 1 : nKnots+2
+matParam2IndFlux = sparse(nIndFluxes*(nSwitchTimes+2), nParamLocal);
+for k = 1 : nSwitchTimes+2
     row = nIndFluxes*(k-1)+(1:nIndFluxes);
-    col =  idParamLocal.knotFluxes(nIndFluxes*(k-1)+(1:nIndFluxes));
+    col =  idParamLocal.switchTimeFluxes(nIndFluxes*(k-1)+(1:nIndFluxes));
     matParam2IndFlux(row, col) = matParam2IndFlux(row, col) + eye(nIndFluxes);
 end
 
 %% param -> concRate + indFlux
-matParam2ConcRateIndFlux = sparse((nNonPoolMets+nIndFluxes)*(nKnots+2),nParamLocal);
-for k = 1 : nKnots+2
+matParam2ConcRateIndFlux = sparse((nNonPoolMets+nIndFluxes)*(nSwitchTimes+2),nParamLocal);
+for k = 1 : nSwitchTimes+2
     row0 = (nNonPoolMets+nIndFluxes)*(k-1) + (1:(nNonPoolMets+nIndFluxes));
     row1 = (nNonPoolMets)*(k-1) + (1:(nNonPoolMets));
     row2 = (nIndFluxes)*(k-1) + (1:(nIndFluxes));
@@ -40,36 +40,36 @@ for k = 1 : nKnots+2
 end
 
 %% concRate + indFlux -> flux
-matConcRateIndFlux2Flux = sparse(nRxns*(nKnots+2), (nNonPoolMets+nIndFluxes)*(nKnots+2));
+matConcRateIndFlux2Flux = sparse(nRxns*(nSwitchTimes+2), (nNonPoolMets+nIndFluxes)*(nSwitchTimes+2));
 tmpMat = full(model.invS);
-for k = 1 : nKnots+2
+for k = 1 : nSwitchTimes+2
     row = nRxns*(k-1) + (1:nRxns);
     col = (nNonPoolMets+nIndFluxes)*(k-1) + (1:(nNonPoolMets+nIndFluxes));
     matConcRateIndFlux2Flux(row, col) = matConcRateIndFlux2Flux(row, col) + tmpMat;
 end
 
 %% flux -> netFlux
-matFlux2NetFlux = sparse(nNetRxns*(nKnots+2), nRxns*(nKnots+2));
+matFlux2NetFlux = sparse(nNetRxns*(nSwitchTimes+2), nRxns*(nSwitchTimes+2));
 tmpMat = model.matRaw2Net;
-for k = 1 : nKnots+2
+for k = 1 : nSwitchTimes+2
     row = nNetRxns*(k-1)+(1:nNetRxns);
     col =  nRxns*(k-1)+(1:nRxns);
     matFlux2NetFlux(row, col) = matFlux2NetFlux(row, col)+tmpMat;
 end
 
 %% flux -> concRate
-matFlux2ConcRate= sparse(nNonPoolMets*(nKnots+2), nRxns*(nKnots+2));
+matFlux2ConcRate= sparse(nNonPoolMets*(nSwitchTimes+2), nRxns*(nSwitchTimes+2));
 tmpMat = full(model.S(1:nNonPoolMets,:));
-for k = 1 : nKnots+2
+for k = 1 : nSwitchTimes+2
     row = nNonPoolMets*(k-1)+(1:nNonPoolMets);
     col =  nRxns*(k-1)+(1:nRxns);
     matFlux2ConcRate(row, col) = matFlux2ConcRate(row, col)+tmpMat;
 end
 
 %% flux -> concRateAllMets
-matFlux2ConcRateAllMet = sparse(nMets*(nKnots+2), nRxns*(nKnots+2));
+matFlux2ConcRateAllMet = sparse(nMets*(nSwitchTimes+2), nRxns*(nSwitchTimes+2));
 tmpMat = full(model.S);
-for k = 1 : nKnots+2
+for k = 1 : nSwitchTimes+2
     row = nMets*(k-1)+(1:nMets);
     col =  nRxns*(k-1)+(1:nRxns);
     matFlux2ConcRateAllMet(row, col) = matFlux2ConcRateAllMet(row, col)+tmpMat;
@@ -86,17 +86,17 @@ if optionsMFA.isUseQPInMH
     tmpFieldNames = fieldnames(idParamMH);
     for f = 1 : length(tmpFieldNames)
         switch tmpFieldNames{f}
-            case {'knotFluxes', 'knots', 'coefCorrCompt'}
+            case {'switchTimeFluxes', 'switchTimes'}
                 row = idParamLocal.(tmpFieldNames{f});
                 col = idParamMH.(tmpFieldNames{f});
             case {'initConcs'}
                 row = idParamLocal.(tmpFieldNames{f})(idOuterOptimMetsInitConcs);
                 col = idParamMH.(tmpFieldNames{f});
-            case {'knotConcRates'}
-                isConcRateOuterOptimMets = false(nNonPoolMets, nKnots+2);
+            case {'switchTimeConcRates'}
+                isConcRateOuterOptimMets = false(nNonPoolMets, nSwitchTimes+2);
                 isConcRateOuterOptimMets(idOuterOptimMetsConcRates,:) = true;
-                isConcRateOuterOptimMets = reshape(isConcRateOuterOptimMets, nNonPoolMets*(nKnots+2), 1);
-                row = idParamLocal.knotConcRates(isConcRateOuterOptimMets);
+                isConcRateOuterOptimMets = reshape(isConcRateOuterOptimMets, nNonPoolMets*(nSwitchTimes+2), 1);
+                row = idParamLocal.switchTimeConcRates(isConcRateOuterOptimMets);
                 col = idParamMH.(tmpFieldNames{f});
             otherwise
                 row = [];
@@ -110,7 +110,7 @@ end
 
 %% Identify parameters in log scale
 isLogParamMH = false(nParamMH,1);
-idLog = [idParamMH.initConcs, idParamMH.knotFluxes, idParamMH.knots, idParamMH.coefCorrCompt];
+idLog = [idParamMH.initConcs, idParamMH.switchTimeFluxes, idParamMH.switchTimes];
 isLogParamMH(idLog) = true;
 
 %% paramLocal -> paramMH
@@ -127,10 +127,10 @@ end
 
 %% paramMH -> concRate
 if optionsMFA.isUseQPInMH
-    matParamMH2ConcRate = sparse(nOuterOptimMetsConcRates*(nKnots+2), nParamMH);
-    for k = 1 : nKnots+2
+    matParamMH2ConcRate = sparse(nOuterOptimMetsConcRates*(nSwitchTimes+2), nParamMH);
+    for k = 1 : nSwitchTimes+2
         row = nOuterOptimMetsConcRates*(k-1)+(1:nOuterOptimMetsConcRates);
-        col =  idParamMH.knotConcRates(nOuterOptimMetsConcRates*(k-1)+(1:nOuterOptimMetsConcRates));
+        col =  idParamMH.switchTimeConcRates(nOuterOptimMetsConcRates*(k-1)+(1:nOuterOptimMetsConcRates));
         matParamMH2ConcRate(row, col) = matParamMH2ConcRate(row, col) + eye(nOuterOptimMetsConcRates);
     end
 else 
@@ -138,16 +138,16 @@ else
 end
 
 %% paramMH -> indFlux
-    matParamMH2IndFlux = sparse(nIndFluxes*(nKnots+2), nParamMH);
-    for k = 1 : nKnots+2
+    matParamMH2IndFlux = sparse(nIndFluxes*(nSwitchTimes+2), nParamMH);
+    for k = 1 : nSwitchTimes+2
         row = nIndFluxes*(k-1)+(1:nIndFluxes);
-        col =  idParamMH.knotFluxes(nIndFluxes*(k-1)+(1:nIndFluxes));
+        col =  idParamMH.switchTimeFluxes(nIndFluxes*(k-1)+(1:nIndFluxes));
         matParamMH2IndFlux(row, col) = matParamMH2IndFlux(row, col) + eye(nIndFluxes);
     end
     
 %% flux -> nonIndFlux
-matFlux2NonIndFlux = sparse(nNonIndFluxes*(nKnots+2), nRxns*(nKnots+2));
-for k = 1 : nKnots+2
+matFlux2NonIndFlux = sparse(nNonIndFluxes*(nSwitchTimes+2), nRxns*(nSwitchTimes+2));
+for k = 1 : nSwitchTimes+2
     row = nNonIndFluxes*(k-1)+(1:nNonIndFluxes);
     col =  nRxns*(k-1)+idNonIndFluxes;
     matFlux2NonIndFlux(row, col) = matFlux2NonIndFlux(row, col) + eye(nNonIndFluxes);

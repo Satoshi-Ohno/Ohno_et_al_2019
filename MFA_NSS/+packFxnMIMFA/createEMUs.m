@@ -1,26 +1,10 @@
-%% ICMを作成
+%% Make EMU network
 function model = createEMUs161129(model, optionsMFA)
-%createEMUs EMUネットワークを構築 (Isotopomer Converted Matrix)を作成
-% 
-% model = createEMUs(model)
-% 
-% INPUT
-%   model       代謝モデル
-%       carbonTransitions   骨格炭素の移動を表す式
-%       S                   化学量論行列
-%       nCarbonMets         代謝物の炭素数リスト
-% 
-% OUTPUT
-%   model       代謝モデル
-%       emuNetwork        EMUのネットワーク
-% 
 
 tmpModel = recoverRxnMetInfo(model);
-
-
 [~, nRxns] = size(tmpModel.S);
 
-%% 反応式をスペースで区切る
+%% split reaction formulus by spaces
 
 rxns = tmpModel.rxns;
 carbonTrans = tmpModel.carbonTransitions;
@@ -43,10 +27,9 @@ tmpModel.cellRxns = cellRxns;
 tmpModel.cellCTrans = cellCTrans;
 tmpModel.arrowIds = arrowIds;
 
-%% 分析する代謝物についてEMUを定義
+%% Define EMU for measured metabolites
 
 idNonPoolMets = find(tmpModel.massType<=0);
-% idMesMet = find(model.massType==0);
 for m = 1 : length(idNonPoolMets)
     mesEmuList(m).name = [];
     mesEmuList(m).met = tmpModel.mets{idNonPoolMets(m)};
@@ -68,11 +51,10 @@ for s = 1 : maxEmuSize
     emuNetwork(s).emuRxns = [];
 end
 
-%% サイズを小さくしながらEMUネットワークを作る
+%% Make EMU network
 for s = maxEmuSize:-1:1
     nTmpEmu = length(emuNetwork(s).emuList);
     if nTmpEmu > 0
-        % スタートのEMUを指定する
         for e = 1 : nTmpEmu
             tmpEmu = {emuNetwork(s).emuList(e).name};
             tmpMet = {emuNetwork(s).emuList(e).met};
@@ -88,7 +70,7 @@ tmpModel = rmfield(tmpModel, 'cellCTrans');
 tmpModel = rmfield(tmpModel, 'arrowIds');
 
 
-%% EMUの数をカウント
+%% Count number of EMUs
 nEmu = zeros(maxEmuSize,1);
 nMassPattern = zeros(maxEmuSize,1);
 for s = 1 : maxEmuSize
@@ -112,54 +94,43 @@ model.emuNetwork= emuNetwork;
 
 end
 
-%% 分析対象のEMUに連結するEMUをつなぐ
+%% Make EMU network
 function emuNetwork =  createEmuNetwork(model, emu, tmpMet, sizeEmu, emuNetwork)
-% if sizeEmu == 3 && strcmp(emu, {'T3P123'})
-%     keyboard;
-% end
-
-try
-    metId = find(strcmp(model.mets, tmpMet));
-    synsRxnIds = find(model.Sprod(metId,:)>0);
-%     synsRxnIds = find(model.S(metId,:)>0);
-    if isempty(synsRxnIds)
-        return
-    end
-    prodEmu = emu;
-    for sr = 1 : length(synsRxnIds)
-        prodMet = tmpMet{:};
-        prodMetCoef = model.Sprod(metId, synsRxnIds(sr));
-%         prodMetCoef = model.S(metId, synsRxnIds(sr));
-        % 前駆体のEMUを見つける
-        [emu,tmpEmuList, idCorresMetInRxn, isMultiProd] = ...
-            findPrecEmu(model, synsRxnIds(sr), prodMet, prodEmu, prodMetCoef);
-        % EMUの情報を更新
-        [emuNetwork, isContFindEmu] = updateEmu(model, emuNetwork, tmpEmuList, ...
-            sizeEmu, synsRxnIds(sr), prodEmu,  idCorresMetInRxn, isMultiProd);
-        for j = 1 : length(emu)
-            if isContFindEmu(j)
-                % 次のEMUを探す
-                prodMet = emu{j}(1:end-sizeEmu);
-                emuNetwork =  createEmuNetwork(model, emu(j), {prodMet}, sizeEmu, emuNetwork);
-            end
-        end
-    end
-catch err
-%     keyboard;
-    rethrow(err)
+metId = find(strcmp(model.mets, tmpMet));
+synsRxnIds = find(model.Sprod(metId,:)>0);
+if isempty(synsRxnIds)
     return
 end
+prodEmu = emu;
+for sr = 1 : length(synsRxnIds)
+    prodMet = tmpMet{:};
+    prodMetCoef = model.Sprod(metId, synsRxnIds(sr));
+    %         prodMetCoef = model.S(metId, synsRxnIds(sr));
+    % 前駆体のEMUを見つける
+    [emu,tmpEmuList, idCorresMetInRxn, isMultiProd] = ...
+        findPrecEmu(model, synsRxnIds(sr), prodMet, prodEmu, prodMetCoef);
+    % EMUの情報を更新
+    [emuNetwork, isContFindEmu] = updateEmu(model, emuNetwork, tmpEmuList, ...
+        sizeEmu, synsRxnIds(sr), prodEmu,  idCorresMetInRxn, isMultiProd);
+    for j = 1 : length(emu)
+        if isContFindEmu(j)
+            % 次のEMUを探す
+            prodMet = emu{j}(1:end-sizeEmu);
+            emuNetwork =  createEmuNetwork(model, emu(j), {prodMet}, sizeEmu, emuNetwork);
+        end
+    end
+end
 
 end
 
-%% 反応の前駆体であるEMUを探す
+%% Find precursor EMU
 function [emu, tmpEmuList, idCorresMetInRxn, isMultiProd] = ...
     findPrecEmu(model, synsRxnId, prodMet, prodEmu, prodMetCoef)
 
 tmpCellRxn = model.cellRxns(synsRxnId,:);
 tmpCellCTrans = model.cellCTrans(synsRxnId,:);
 idMetInRxn = find(strcmp({prodMet}, tmpCellRxn));
-idMetInRxn = idMetInRxn(idMetInRxn>model.arrowIds(synsRxnId)); % 5/26更新。product中の位置のみを気にする。
+idMetInRxn = idMetInRxn(idMetInRxn>model.arrowIds(synsRxnId)); 
 nProdMetInRxn = nnz(strcmp({prodMet}, tmpCellRxn(model.arrowIds(synsRxnId)+1:end)));
 
 emu = cell(model.arrowIds(synsRxnId)/2,1);
@@ -177,16 +148,12 @@ else
 end
 for m = 1 : length(idMetInRxn)
     tmpCAtoms = [];
-    % prodEmuの炭素原子番号 (abc...)の取得
     for j = 1 : length(prodEmu{:})-length(prodMet)
         idCarbon = str2double(prodEmu{1}(j+length(prodMet)));
         tmpCAtoms = [tmpCAtoms, tmpCellCTrans{idMetInRxn(m)}(idCarbon)];
     end
-    % 前駆体Emuの取得    
     for j = 1 :model.arrowIds(synsRxnId)
-%     for j = 1 :model.arrowIds(synsRxnId)/2
         tempMet = tmpCellRxn{j};
-%         tempMet = tmpCellRxn{j*2-1};
         tmpIsCInEmu = ismember(tmpCellCTrans{j},  tmpCAtoms);
         if any(tmpIsCInEmu)
             jj = jj +1;
@@ -216,13 +183,10 @@ for j = 1 : length(emu)
     tmpEmuList(j).prodEmuCoef = prodEmuCoef(j);
 end
 
-% if prodEmuCoef ~=1
-%     keyboard;
-% end
 end
 
 
-%% EMUの情報を更新する
+%% Update EMU network
 function [emuNetwork, isContFindEmu] = updateEmu(...
     model, emuNetwork, tmpEmuList, sizeEmu, synsRxnId, prodEmu, idCorresMetInRxn, isMultiProd)
 
@@ -239,11 +203,10 @@ for j = 1 : length(emu)
     tmpEmuList(j).isSmallerSize = false;
     tmpSizeEmu = tmpEmuList(j).size;
     
-    % 見つかったEMUを追加
     if ~ismember(emu(j), {emuNetwork(sizeEmu).emuList.name})
         if tmpSizeEmu == sizeEmu
             if model.massType(strcmp(model.mets, emuMets(j)))<=0
-                isContFindEmu(j)=true;     % 基質orプールの代謝物のEMUなら次を探さない
+                isContFindEmu(j)=true;     
                 isKnownEmu(j) =false;
             end
         else
@@ -253,7 +216,6 @@ for j = 1 : length(emu)
         emuNetwork(sizeEmu).emuList = [emuNetwork(sizeEmu).emuList, tmpEmuList(j)];
     end
     
-    % サイズの小さいEMUを追加
     tmpEmuList(j).isKnownEmu  = true;
     tmpEmuList(j).isSmallerSize = false;
     if model.massType(strcmp(model.mets, emuMets(j)))<=0
@@ -266,9 +228,7 @@ for j = 1 : length(emu)
     end
 end
 
-% 見つかったEMUをつなぐ反応を記録
 if isMultiProd
-% if length(emuMets)==2 &&  sum([tmpEmuList.size])~= sizeEmu %F6P → T3P + T3Pのような場合の例外処理
     [unqIdCorresMetInRxn, idUnq]= unique(idCorresMetInRxn);
     subsEmuCoef = subsEmuCoef(idUnq);
     prodEmuCoef = prodEmuCoef(idUnq);
@@ -296,7 +256,7 @@ end
 end
 
 
-%% EMUを定義する
+%% Define EMU
 function emu = defineEmu(met, isCInEmu)
 idEmu = 0;
 for k = length(isCInEmu) : -1 : 1

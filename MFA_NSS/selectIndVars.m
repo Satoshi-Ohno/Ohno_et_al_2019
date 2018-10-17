@@ -9,7 +9,7 @@ if nargin<=2
     idInputIndVars = [];
 end
 if nargin <= 1
-    isInputFullIndVarsConstr = false;% trueならば、階段行列からの独立変数同定は必要ない。
+    isInputFullIndVarsConstr = false;
 end
 
 %% Identify redundanct variables

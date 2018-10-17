@@ -76,19 +76,7 @@ for m = 1 : nEvalConcMets
     % vector of estimates
     tmpConcsSim = sol.concs(idMet,idCompTimeSim);
     
-    % correct according to coefCorrCompt
-    idCompt = model.metInfo.compt(idMet);
-    coefCorrCompt = [1;sol.coefCorrCompt];
-    tmpTimeSim = sol.timeSim;
-    if isempty(sol.coefCorrCompt)
-        if idCompt>=2
-            tmpConcsSim = corrComptCell2Media(model, expData, optionsMFA, sol.concs(idMet,:), tmpTimeSim);
-        else
-            tmpConcsSim = tmpConcsSim* coefCorrCompt(idCompt);
-        end
-    else
-        tmpConcsSim = tmpConcsSim* coefCorrCompt(idCompt);
-    end    
+
     vecSim(mm+(1:nComp)) = reshape(tmpConcsSim, nComp, 1);
     
     % vector of standard deviations

@@ -1,4 +1,15 @@
 function [sol, model, expData, optionsMFA] =  run_MFA_NSS(xlsModelFileName, expData, optionsMFA)
+%run_MFA_NSS        run metabolic flux analysis under non-steady-state
+% INPUT
+% xlsModelFileName        Excel file name for model
+% expData         Measured data whch is used to calculate wRSS
+% optionsMFA          options of metaboic flux analysis under non-steady-state
+% 
+% OUTPUT
+% sol         solution of metabolic flux analysis under non-steady-state
+% model       metabolic network model
+% expData       expData wher some fields are added
+% optionsMFA        optionsMFA where some fields are added
 
 import packFxnMIMFA.*
 
@@ -9,10 +20,15 @@ for f = 1 : length(filedNamesInputOptionsMFA)
     defaultOptionsMFA.(filedNamesInputOptionsMFA{f}) = optionsMFA.(filedNamesInputOptionsMFA{f});
 end
 optionsMFA = defaultOptionsMFA;
-optionsMFA.patternNKnots = optionsMFA.nKnots;
+
+if optionsMFA.isRxnDepNSwitchTimes
+    optionsMFA.nSwitchTimes = max(optionsMFA.nSwitchTimesNetRxns);
+    optionsMFA.patternNSwitchTimes = unique(optionsMFA.nSwitchTimesNetRxns);
+else
+    optionsMFA.patternNSwitchTimes = optionsMFA.nSwitchTimes;
+end
 
 %% load model defined in Excel file
-% model.name =optionsMFA.fileDirNames.modelFileName;
 model.name = strrep(xlsModelFileName, '.xls', '');
 model = loadXlsNetwork(model, optionsMFA, xlsModelFileName);
 
@@ -30,28 +46,14 @@ model = createEmuMatrix(model, optionsMFA);
 model = makeNetFluxInfo(model, optionsMFA);
 
 
-
 %% Identification of independent flux
-% if isempty(optionsMFA.inputIndRxnNames)
-%     idInputIndRxns = [];
-% else
-%     [~,idInputIndRxns] = ismember(optionsMFA.inputIndRxnNames, model.rxnNames);
-% end
 A = full(model.S(~model.metInfo.isPoolMets, :));
-% if optionsMFA.isFluxConstr    
-%     idInputIndVars = unique([optionsMFA.constr.fluxes.idRxns';idInputIndRxns]);
-% else
-%     idInputIndVars = unique(idInputIndRxns);
-% end
 idInputIndVars = [];
-% Ax=bから独立のxのIDおよびx = C[b;x^ind]となる行列Cを求める
-% fxnSelectIndVars = str2func('selectIndVars171215');
 isInputFullIndVarsConstr = false;
 fxnSelectIndVars = str2func(optionsMFA.fxnName.selectIndVars);
 [idIndVars, idRedandantConstr, Cx, C0, idInvalidIndFluxes] = ...
     fxnSelectIndVars(A, isInputFullIndVarsConstr, idInputIndVars);
 model.idIndFluxes = idIndVars;
-% model.idRedandantMet = idRedandantConstr;
 model.invS = [C0,Cx];
 
 disp('Following flux cannot be independent. Removed from input independent flux.')
@@ -63,7 +65,7 @@ end
 varSet = prepVarsMFA(model, expData, optionsMFA);
 optionsMFA.varSet = varSet;
 
-optionsMFA = prepNKnotsRxnsMets(model, expData, optionsMFA);
+optionsMFA = prepNSwitchTimesRxnsMets(model, expData, optionsMFA);
 
 [optionsMFA.lbInit, optionsMFA.ubInit] = ...
     prepParamBound(model, expData, optionsMFA, 'init', 1/optionsMFA.paramBoundExpandRatio.^2);
@@ -107,11 +109,11 @@ for i = 1 : length(optionsMFA.optionsODE.activeOptionNames);
 end
 
 disp('MI-MFA start')
-if optionsMFA.isRxnSpecificNKnots
+if optionsMFA.isRxnDepNSwitchTimes
     disp(['reaction-specific # of time intervals'])
 else
-    disp(['# of time intervals: ' num2str(optionsMFA.nKnots+1) ...
-        ' (' num2str(optionsMFA.nKnots) ' internal knots)'])
+    disp(['# of time intervals: ' num2str(optionsMFA.nSwitchTimes+1) ...
+        ' (' num2str(optionsMFA.nSwitchTimes) ' switch times)'])
 end
 
 
@@ -125,15 +127,11 @@ expData.nExpData = nExpData;
 optionsMFA.optionsOptimMH.initParams = initParams;
 optionsMFA.optionsOptimMH.initScores = initScores;
 
-% if ~optionsMFA.isCheckODE
-        optimType =  'metaheuristic';
-    objfun =@(params) fxnSolveMDVDynamics(...
-        params, model, expData, optionsMFA, optimType);
-    [~,~,sol] = objfun(initParams(:,1));
+optimType =  'metaheuristic';
+objfun =@(params) fxnSolveMDVDynamics(...
+    params, model, expData, optionsMFA, optimType);
+[~,~,sol] = objfun(initParams(:,1));
 
-%     sol.historyMH = [];
-%     save(optionsMFA.saveFileName, 'model', 'expData', 'optionsMFA', 'sol')
-% end
 disp(['Best Score by initial sampling before optimization:' num2str(min(initScores))])
 
 
@@ -147,7 +145,6 @@ objfun =@(params) fxnSolveMDVDynamics(...
 disp(' ')
 disp('Metaheuristic optimization by CMA-ES')
 solMH = performOptimMH(model, expData, optionsMFA, objfun, initParams);
-% historyMH = solMH.historyMH;
 disp(['Best Score by metaheuristic optimization:' num2str(solMH.score)])
 
 %% Local optimization%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -178,8 +175,6 @@ else
         sol.optimType = 'metaheuristic';
     end
 end
-% sol.historyMH = historyMH;
-% save(optionsMFA.saveFileName,'sol','optionsMFA', '-append')
 
 end
 
@@ -190,11 +185,6 @@ optionsOptimMH = optionsMFA.optionsOptimMH;
 optimType =  'metaheuristic';
 isLogTransform = true;
 
-% fxnSaveMFASol = str2func(optionsMFA.fxnName.saveMFASol);
-% saveFun = @(params, historyMH, nSave) fxnSaveMFASol(...
-%     model, expData, optionsMFA, params, historyMH, nSave, objfun, optimType, []);
-% optionsOptimMH.isSaveProgress = true;
-
 %% Set parameter bound
 isIndParam = true;
 lbMH = optionsMFA.lbMH;
@@ -204,69 +194,35 @@ optionsOptimMH.lb = fxnParam2vector(lbMH, optionsMFA, optimType, isLogTransform,
 optionsOptimMH.ub = fxnParam2vector(ubMH, optionsMFA, optimType, isLogTransform, isIndParam);
 
 
-%% 最適化の設定
+%% Setting options of CMA-ES
 tmpSigma = sqrt(var(initParams,[],2));
 
 objfunStr = optionsMFA.fxnName.solveMDVDynamics;
 fxnSolveMDVDynamics = str2func(objfunStr);
 objfun =@(params) fxnSolveMDVDynamics(...
     params, model, expData, optionsMFA, optimType);
-% testSol1 = objfun(mean(initParams,2));
-% testSol = objfun(initParams(:,1));
-% if ~strcmp(optionsOptimMH.method, {'CMA-ES'})
-%     error('CMA-ES以外は未対応です')
-% end
-% sigmaCMAES = [];
-% sigmaCMAES = sqrt(var(initParams,[],2));
-% sigmaCMAES = sigmaCMAES/10^2;
 sigmaCMAES = tmpSigma;
-% maxSigma = 10^-3;
-% sigmaCMAES(sigmaCMAES>=maxSigma) = maxSigma;
-% maxSigma = max(sigmaCMAES);
-% sigmaCMAES(sigmaCMAES<maxSigma/10^5) = maxSigma/10^5;
 varaginCMAES{1} = model;
 varaginCMAES{2} = expData;
 varaginCMAES{3} = optionsMFA;
 varaginCMAES{4} = optimType;
 optionsCMAES = cmaes('defaults');
-% optionsCMAES = myCMAES('defaults');
 optionsCMAES.MaxFunEvals = optionsOptimMH.nMaxEval;
 optionsCMAES.LBounds = optionsOptimMH.lb;
 optionsCMAES.UBounds = optionsOptimMH.ub;
 optionsCMAES.PopSize = optionsOptimMH.popSize;
 optionsCMAES.DispModulo = ceil(optionsOptimMH.nMaxEval*0.01/(optionsOptimMH.popSize/2)); % nMaxEvalの1%ずつ。
-% optionsCMAES.SaveFilename = [optionsMFA.saveFileName '.mat'];
-%     if ~ isempty(optionsOptimMH.RecombinationWeights)
-%         optionsCMAES.RecombinationWeights = optionsOptimMH.RecombinationWeights;
-%     end
 if ~ isempty(optionsOptimMH.CMA.active)
     optionsCMAES.CMA.active = optionsOptimMH.CMA.active;
 end
-%     if ~ isempty(optionsOptimMH.Noise.on)
-%         optionsCMAES.Noise.on = optionsOptimMH.Noise.on;
-%     end
 
 %% Run metaheuristic optimization
 [solMHRaw.bestParam, solMHRaw.bestScore, ...
     solMHRaw.couteval, solMHRaw.stopflag,solMHRaw.out,solMHRaw.bestever] = ...
     cmaes(objfunStr, initParams, sigmaCMAES, optionsCMAES, varaginCMAES{:});
-% [solMHRaw.bestParam, solMHRaw.bestScore, ...
-%     solMHRaw.couteval, solMHRaw.stopflag,solMHRaw.out,solMHRaw.bestever, historyMH] = ...
-%     myCMAES(objfunStr, initParams, sigmaCMAES, optionsCMAES, saveFun, varaginCMAES{:});
-% xmin, ...      % minimum search point of last iteration
-% fmin, ...      % function value of xmin
-% counteval, ... % number of function evaluations done
-% stopflag, ...  % stop criterion reached
-% out, ...       % struct with various histories and solutions
-% bestever ...   % struct containing overall best solution (for convenience)
 
 %% Final solution of metaheuristic optimization
 [~,~,solMH] = objfun(solMHRaw.bestever.x);
-% solMH.historyMH = historyMH;
-
-% optionsOptimMH.optionsCMAES = optionsCMAES;
-% optionsMFA.optionsOptimMH = optionsOptimMH;
-% save(optionsMFA.saveFileName,'solMH','solMHRaw', 'optionsOptimMH', '-append')
 
 end
 
@@ -324,23 +280,13 @@ nonlconFmincon = nonlcon;
 objfunFmincon = objfun;
 
 %% Run local optimization
-% disp(['Solver:' optionsOptimLocal.method])
-% if optionsOptimLocal.isUseMyJacobian== true
-%     disp('Jacobian function: user-supplied')
-% else
-%     disp('Jacobian function: default')
-% end
 disp([' Maximum number of evaluation: ' num2str(nMaxEvalLocalOpt)])
 
-% [x,fval,exitflag,output,lambda,grad,hessian] = fmincon(fun,x0,A,b,Aeq,beq,lb,ub,nonlcon,options)
 [solLocalRaw.params, solLocalRaw.score, ...
     solLocalRaw.exitFlag, solLocalRaw.output, ~, solLocalRaw.grad, solLocalRaw.hessian]  ...
     = fmincon(objfunFmincon, initParamLocal, ...
     A, b, Aeq, beq, ...
     optionsOptimLocal.lb, optionsOptimLocal.ub, nonlconFmincon, optionsFmincon);
-% if optionsOptimLocal.isUseMyJacobian == true
-%     solLocalRaw.output.funcCount = solLocalRaw.output.funcCount*nParamLocal;
-% end
 
 
 disp(' ')
@@ -350,7 +296,7 @@ try
     optionsCalcJacobian.diffType = {'central', 'forward'};
     tmpSol.jacobian = calcJacobian(objfunRes, solLocalRaw.params, ...
         optionsOptimLocal.lb, optionsOptimLocal.ub, optionsCalcJacobian);
-    save(optionsMFA.saveFileName,'optionsCalcJacobian','-append')
+%     save(optionsMFA.saveFileName,'optionsCalcJacobian','-append')
 catch err
     tmpSol.jacobian = [];
 end
@@ -361,12 +307,8 @@ end
 %% Final solution of local optimization
 [~,~,solLocal] = objfun(solLocalRaw.params);
 solLocal.jacobian = tmpSol.jacobian;
-% solLocal.hessian = solLocalRaw.hessian;  
 optionsOptimLocal.optionsLsqnonlinFmincon = optionsFmincon;
 solLocal.output = solLocalRaw.output;
-% optionsMFA.optionsOptimLocal = optionsOptimLocal;
-
-% save(optionsMFA.saveFileName,'solLocal','solLocalRaw','optionsOptimLocal', '-append')
 
 end
 

@@ -26,67 +26,51 @@ else
 end
 paramMHLin = colVec(paramMHLin);
 
-%% knots and coefCorrCompt
+%% switch times 
 if isInputIndVars
     switch optimType
         case {'local', 'localNonLinConstr'}
             idParam = optionsMFA.idParamLocal;
             
-            % knots
+            % switch times
             isInParams = false(1,idParam.nParam);
-            isInParams(idParam.knots) = true;
+            isInParams(idParam.switchTimes) = true;
             isInParams = isInParams(optionsMFA.isIndParams.local);
-            knots = paramInd(isInParams);
+            switchTimes = paramInd(isInParams);
             
-            % coefCorrCompt
-            isInParams = false(1,idParam.nParam);
-            isInParams(idParam.coefCorrCompt) = true;
-            isInParams = isInParams(optionsMFA.isIndParams.local);
-            coefCorrCompt = paramInd(isInParams);
         case {'metaheuristic', 'init', 'QP'}
             idParam = optionsMFA.idParamMH;
             
-            % knots
+            % switchTimes
             isInParams = false(1,idParam.nParam);
-            isInParams(idParam.knots) = true;
+            isInParams(idParam.switchTimes) = true;
             isInParams = isInParams(optionsMFA.isIndParams.MH);
-            knots = paramMHLin(isInParams);
+            switchTimes = paramMHLin(isInParams);
             
-            % coefCorrCompt
-            isInParams = false(1,idParam.nParam);
-            isInParams(idParam.coefCorrCompt) = true;
-            isInParams = isInParams(optionsMFA.isIndParams.MH);
-            coefCorrCompt = paramMHLin(isInParams);
-%         otherwise
-%             keyboard;
     end
 else
     idParam = optionsMFA.idParamMH;
-    knots = paramMHLin(idParam.knots);
-    coefCorrCompt = paramMHLin(idParam.coefCorrCompt);
+    switchTimes = paramMHLin(idParam.switchTimes);
 
 end
-if ~optionsMFA.isAccountMediaDrop && isempty(coefCorrCompt)
-    coefCorrCompt = zeros(length(optionsMFA.idParamLocal.coefCorrCompt),1) + ...
-        (optionsMFA.lb.coefCorrCompt+optionsMFA.ub.coefCorrCompt)/2;
-end
 
-fullKnots = [0, knots', expData.time(end)];
+
+fullSwitchTimes = [0, switchTimes', expData.time(end)];
 
 %% Make QP model
-fxnPrepConvertMatDepKnots = str2func(optionsMFA.fxnName.prepConvertMatDepKnots);
-convertMat = fxnPrepConvertMatDepKnots(model, expData, optionsMFA, fullKnots);
+fxnPrepConvertMatDepSwitchTimes = str2func(optionsMFA.fxnName.prepConvertMatDepSwitchTimes);
+convertMat = fxnPrepConvertMatDepSwitchTimes(model, expData, optionsMFA, fullSwitchTimes);
 optionsMFA.convertMat = convertMat;
 
-qpModel =  makeQPModelOri(model, expData, optionsMFA, knots, coefCorrCompt, optimTypeInit);
+qpModel =  makeQPModelOri(model, expData, optionsMFA, switchTimes, optimTypeInit);
 
 %% modify QP model for constraints in local optimization
 if isInputFullIndVarsConstr
     switch optimType
         case {'local'}
-            nKnots = optionsMFA.varSet.nKnots;
+            nSwitchTimes = optionsMFA.varSet.nSwitchTimes;
             
-            if nKnots >=1
+            if nSwitchTimes >=1
                 idConstrFmincon = [qpModel.idQPConstr.flux1, qpModel.idQPConstr.flux2];
             else 
                 idConstrFmincon = [qpModel.idQPConstr.concs, qpModel.idQPConstr.flux1, qpModel.idQPConstr.flux2];
@@ -94,20 +78,20 @@ if isInputFullIndVarsConstr
             qpModel.A = qpModel.A(idConstrFmincon, :);
             qpModel.b = qpModel.b(idConstrFmincon);
             
-            if nKnots>=1
-                AKnotTime = zeros(nKnots+1,idParam.nParam);
-                bKnotTime = zeros(nKnots+1,1);
-                for k = 1 : nKnots+1
+            if nSwitchTimes>=1
+                AKnotTime = zeros(nSwitchTimes+1,idParam.nParam);
+                bKnotTime = zeros(nSwitchTimes+1,1);
+                for k = 1 : nSwitchTimes+1
                     switch k
                         case 1
-                            AKnotTime(k, idParam.knots(1)) = -1;
-                            bKnotTime(k) = -fullKnots(1) - optionsMFA.minKnotTimeDiff;
-                        case nKnots+1
-                            AKnotTime(k, idParam.knots(nKnots)) = 1;
-                            bKnotTime(k) = fullKnots(end) - optionsMFA.minKnotTimeDiff;
+                            AKnotTime(k, idParam.switchTimes(1)) = -1;
+                            bKnotTime(k) = -fullSwitchTimes(1) - optionsMFA.minKnotTimeDiff;
+                        case nSwitchTimes+1
+                            AKnotTime(k, idParam.switchTimes(nSwitchTimes)) = 1;
+                            bKnotTime(k) = fullSwitchTimes(end) - optionsMFA.minKnotTimeDiff;
                         otherwise
-                            AKnotTime(k, idParam.knots(k)) = -1;
-                            AKnotTime(k, idParam.knots(k-1)) = -1;
+                            AKnotTime(k, idParam.switchTimes(k)) = -1;
+                            AKnotTime(k, idParam.switchTimes(k-1)) = -1;
                             bKnotTime(k) =  - optionsMFA.minKnotTimeDiff;
                     end
                 end
@@ -125,8 +109,8 @@ end
 qpModel = modifyQPModelMassBalance(model, expData, optionsMFA, qpModel, optimType);
 
 %% Add constrainsf for reaction dependent number of time intervals
-if optionsMFA.isRxnSpecificNKnots
-    qpModel = modifyQPModelConstrRxnSpecificNKnots(model, expData, optionsMFA, ...
+if optionsMFA.isRxnDepNSwitchTimes
+    qpModel = modifyQPModelConstrRxnDepNSwitchTimes(model, expData, optionsMFA, ...
         qpModel, optimTypeInit);
 end
 
@@ -182,24 +166,23 @@ else
             case {'metaheuristic'}
                 idParamLocal = optionsMFA.idParamLocal;
                 nNonPoolMets = optionsMFA.varSet.nNonPoolMets;
-                nKnots = optionsMFA.varSet.nKnots;
+                nSwitchTimes = optionsMFA.varSet.nSwitchTimes;
                 nIndFluxes = optionsMFA.varSet.nIndFluxes;
                 
-                idParamKnotConcRates = reshape(idParamLocal.knotConcRates, nNonPoolMets, nKnots+2);
-                idParamKnotFluxes = reshape(idParamLocal.knotFluxes, nIndFluxes, nKnots+2);
+                idParamKnotConcRates = reshape(idParamLocal.switchTimeConcRates, nNonPoolMets, nSwitchTimes+2);
+                idParamKnotFluxes = reshape(idParamLocal.switchTimeFluxes, nIndFluxes, nSwitchTimes+2);
                 orderVar{1} = [...
                     idParamLocal.initConcs,...
                     idParamKnotConcRates(:,1)',...
                     idParamKnotConcRates(:,end)',...
                     idParamKnotFluxes(:,1)',...
                     idParamKnotFluxes(:,end)',...
-                    idParamLocal.knots,...
-                    idParamLocal.coefCorrCompt,...
+                    idParamLocal.switchTimes,...
                     ];
-                if nKnots >= 1
+                if nSwitchTimes >= 1
                     orderVar{1} = [orderVar{1},...
-                        reshape(idParamKnotConcRates(:,2:end-1), nNonPoolMets*nKnots, 1)',...
-                        reshape(idParamKnotFluxes(:,2:end-1), nIndFluxes*nKnots, 1)',...
+                        reshape(idParamKnotConcRates(:,2:end-1), nNonPoolMets*nSwitchTimes, 1)',...
+                        reshape(idParamKnotFluxes(:,2:end-1), nIndFluxes*nSwitchTimes, 1)',...
                         ];
                 end
                 if ~isempty(qpModel.Aeq)

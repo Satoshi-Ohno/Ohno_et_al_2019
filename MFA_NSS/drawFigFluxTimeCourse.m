@@ -1,29 +1,18 @@
-function figH=drawFigFluxTimeCourse(model, expData, solMFA, solMFARsmpl, optionsMFA, options)
+%% Draw time course of estimated fluxes
+function figH=drawFigFluxTimeCourse(model, expData, solMFA, optionsMFA, options)
 
-% field2var(optionsMFA.varSet)
-% field2var(solMFA)
+options.nPlotSol = min(1);
+options.isRecalcErrorbar = false;
+options.typePlotErrorbar = 2;
+options.typeDrawCIArea = 2;
+options.isPlotAllFitting = true;
+options.typeFluxAll = 2;
 
-% model = recoverRxnMetInfo(model);
 
 if ~isfield(options, 'legendList')
     options.legendList = [];
 end
-if ~isfield(options, 'plotColor')
-    options.plotColor = cell(1, length(options.typeFluxAll));
-    for i = 1 : length(options.typeFluxAll)
-        switch i
-            case 1
-                options.plotColor{i} = 'b';
-            case 2
-                options.plotColor{i} = 'r';
-            otherwise
-                options.plotColor{i} = 'g';
-        end
-    end
-end
-% field2var(options)
-
-% options.fontSize.legend=options.fontSize.title;
+options.plotColor = {'r'};
 
 options.fontSize.axis = 8;
 options.fontSize.title = 12;
@@ -34,73 +23,40 @@ options.markerSize=3;
 
 nFig=0;
 
-%% Figure‚Ì€”õ
 nFig=nFig+1;
 figH(nFig) = figure('Color', 'w');
-% figH(nFig) = myfigA4('V');
-% Vratio = 0.5;
-% Hratio = 1;
-% pos = get(figH(nFig), 'Position');
-% pos(2) = pos(2)+pos(4)*(1-Vratio);
-% pos(4) = pos(4)*(Vratio);
-% pos(3) = pos(3)*(Hratio);
-% set(figH(nFig), 'Position', pos);
 
-
-
-% figH = myfigA4;
-% figPos = get(gcf, 'Position');
-% figPos(1) = figPos(1)+figPos(3)/2;
-% set(gcf, 'PaperPositionMode', 'auto')
-% set(gcf, 'Position',figPos)
-
-
-%% ƒtƒ‰ƒbƒNƒX‚Ì}Ž¦
 for i = 1 : length(options.typeFluxAll)
     typeFlux = options.typeFluxAll(i); % flux
-    tmpDrawFluxTimeCourse170901(...
+    tmpDrawFluxTimeCourse(...
         model, expData, solMFA(1), [], optionsMFA, options, figH, typeFlux)
 end
 
 end
 
 
-function tmpDrawFluxTimeCourse170901(...
+function tmpDrawFluxTimeCourse(...
     model, expData, solMFA, solMFARsmpl, optionsMFA, options, figH, typeFlux)
-%% €”õ
-% field2var(optionsMFA.varSet)
-% field2var(sol)
 nNetRxns = optionsMFA(1).varSet.nNetRxns;
 nRxns = optionsMFA(1).varSet.nRxns;
 idNetRxns = optionsMFA(1).varSet.idNetRxns;
-% idRxns = optionsMFA(1).varSet.idRxns;
-
-% nKnots = optionsMFA(1).nKnots
-% field2var(options)
 
 idTypeFlux = find(typeFlux==options.typeFluxAll);
 fontSize=options.fontSize;
 
-% axisFontSize = 8;
-% titleFontSize = 10;
-% labelFontSize = 10;
-% legendFontSize = 8;
-% markerSize = 5;
 
-%% }Ž¦ðŒ‚É‚æ‚éÝ’è
 switch typeFlux
     case 1 % fllux
         nPlotRxns = nRxns;
-        fieldNameFlux = 'knotFluxes';
-        fieldNameFluxSD = 'knotFluxSDs';
+        fieldNameFlux = 'switchTimeFluxes';
+        fieldNameFluxSD = 'switchTimeFluxSDs';
         fieldNameFluxSimCIUb = 'fluxSimCIUb';
         fieldNameFluxSimCILb = 'fluxSimCILb';
         fieldNameFluxesCI= 'fluxesCI';
         fieldNameRxnNames = 'rxnNames';
         idRxnList = 1:nRxns;
-        if isfield(solMFA, 'isRxnSpecificNKnots') && solMFA.isRxnSpecificNKnots
-            fieldNameMatNKnotsRxns = 'matNKnotsRxns';
-%             matNKnotsRxns = optionsMFA.matNKnotsRxns;
+        if isfield(solMFA, 'isRxnDepNSwitchTimes') && solMFA.isRxnDepNSwitchTimes
+            fieldNameMatNSwitchTimesRxns = 'matNSwitchTimesRxns';
         end
     case 2 % netFlux
         nPlotRxns = nNetRxns;
@@ -111,9 +67,8 @@ switch typeFlux
         fieldNameFluxesCI= 'netFluxesCI';
         fieldNameRxnNames = 'netRxnNames';
         idRxnList = idNetRxns;
-        if isfield(solMFA, 'isRxnSpecificNKnots') && solMFA.isRxnSpecificNKnots
-            fieldNameMatNKnotsRxns = 'matNKnotsNetRxns';
-%             matNKnotsRxns = optionsMFA.matNKnotsNetRxns;
+        if isfield(solMFA, 'isRxnDepNSwitchTimes') && solMFA.isRxnDepNSwitchTimes
+            fieldNameMatNSwitchTimesRxns = 'matNSwitchTimesNetRxns';
         end
 end
 
@@ -130,7 +85,6 @@ else
 end
 idPlotSol = 1:nPlotSol;
 
-%% }Ž¦
 figure(figH)
 for r = 1 : nPlotRxns
     switch length(options.typeFluxAll)
@@ -147,16 +101,12 @@ for r = 1 : nPlotRxns
                 case 2
                     idSp = (ceil(r/nSpRowFlux))*nSpRowFlux+r;
             end
-        otherwise
-            error('typeFluxAll‚ª3ˆÈã‚Ìê‡‚Í–¢‘Î‰ž') 
     end
     subplot(nSpRow,nSpCol,idSp)
     set(gca, 'FontSize',fontSize.axis)
-%     set(gca, 'FontSize',fontSize.axis*0.8)
     hold on
     
     for i = 1
-%     for i = nPlotSol+1:-1:1
         if i == 1
             tmpSol = solMFA;
         else
@@ -170,69 +120,14 @@ for r = 1 : nPlotRxns
             lineWidth = 0.5;
         end
         
-        if isfield(tmpSol, 'knots')
-            tmpFullKnots = [0, tmpSol.knots', expData(1).time(end)];
+        if isfield(tmpSol, 'switchTimes')
+            tmpFullSwitchTimes = [0, tmpSol.switchTimes', expData(1).time(end)];
         else
-            tmpFullKnots = [];
+            tmpFullSwitchTimes = [];
         end
         
-        %% M—Š‹æŠÔ‚Ì}Ž¦
-        isDrawCIArea = false;
-        switch options.typeDrawCIArea
-            case 0 %}Ž¦‚µ‚È‚¢
-            case 1 %Å“K‰ð‚Ì‚Ý}Ž¦
-                if i== 1
-                    isDrawCIArea = true;
-                end
-            case 2 % ‘S‚Ä‚É‚Â‚¢‚Ä}Ž¦
-                isDrawCIArea = true;
-        end
-        if ~isfield(solMFA, 'knotFluxSDs')
-           isDrawCIArea = false;
-        end
-        if isDrawCIArea
-            fillX = [tmpSol.timeFluxSim, tmpSol.timeFluxSim(end:-1:1)];
-            fillY = [...
-                tmpSol.(fieldNameFluxSimCIUb)(r,:),...
-                tmpSol.(fieldNameFluxSimCILb)(r,end:-1:1)];
-            
-            fillH = fill(fillX, fillY, tmpPlotColor);
-            set(fillH, 'FaceAlpha', 0.3, 'EdgeColor', 'none')
-        end
-
-        %% ƒGƒ‰[ƒo[‚Ì}Ž¦
-        isPlotErrorbar = false;
-        switch options.typePlotErrorbar
-            case 0 %}Ž¦‚µ‚È‚¢
-            case 1 %Å“K‰ð‚Ì‚Ý}Ž¦
-                if i== 1
-                    isPlotErrorbar = true;
-                end
-            case 2 % ‘S‚Ä‚É‚Â‚¢‚Ä}Ž¦
-                isPlotErrorbar = true;
-        end
-        if ~isfield(solMFA, 'knotFluxSDs')
-           isPlotErrorbar = false;
-        end
-        if isempty(tmpFullKnots)
-            isPlotErrorbar = false;
-        end
-        if isPlotErrorbar
-            loc = ismember(tmpSol.timeFluxSim, tmpFullKnots);
-            halfCI = (tmpSol.(fieldNameFluxSimCIUb)(r,loc)+tmpSol.(fieldNameFluxSimCILb)(r,loc))/2;
-            lenCI = (tmpSol.(fieldNameFluxSimCIUb)(r,loc)-tmpSol.(fieldNameFluxSimCILb)(r,loc))/2;
-            if isfield(tmpSol, 'isRxnSpecificNKnots') && tmpSol.isRxnSpecificNKnots
-                isPlotErrorbarKnots = optionsMFA(i).(fieldNameMatNKnotsRxns)(r,:);
-%                 isPlotErrorbarKnots = matNKnotsRxns(r,:);
-            else
-                isPlotErrorbarKnots = true(1,length(tmpFullKnots));
-            end
-            errorbar(tmpFullKnots(isPlotErrorbarKnots), halfCI(isPlotErrorbarKnots) , lenCI(isPlotErrorbarKnots), ...
-                tmpPlotColor, 'LineWidth', lineWidth, 'LineStyle', 'none')
-        end
-        
-        %% ƒtƒ‰ƒbƒNƒX‚Ì}Ž¦
-        if isempty(tmpFullKnots) % LakeEe—p
+        %% Draw fluxes
+        if isempty(tmpFullSwitchTimes) 
             switch typeFlux
                 case 1
                     plot(tmpSol.timeFluxSim, tmpSol.fluxSim(r,:), ...
@@ -242,7 +137,7 @@ for r = 1 : nPlotRxns
                         tmpPlotColor, 'LineWidth', lineWidth, 'LineStyle', '-')
             end
         else
-            plot(tmpFullKnots, tmpSol.(fieldNameFlux)(r,:), ...
+            plot(tmpFullSwitchTimes, tmpSol.(fieldNameFlux)(r,:), ...
                 tmpPlotColor, 'LineWidth', lineWidth, 'LineStyle', '-')
         end
 
@@ -256,8 +151,7 @@ for r = 1 : nPlotRxns
         ylim([0, ylimData(2)])
     end
     ylimData = ylim;
-    tmpUbFlux = optionsMFA(1).ub.knotFluxes;
-%     tmpUbFlux = max([optionsMFA(1).ub.knotFluxes, optionsMFA(1).constr.fluxes.ub]);
+    tmpUbFlux = optionsMFA(1).ub.switchTimeFluxes;
     if ylimData(2) >= tmpUbFlux
         ylim([ylimData(1),tmpUbFlux])
     end
@@ -270,35 +164,10 @@ for r = 1 : nPlotRxns
     titleStr = strrep(titleStr, '_f', '');
     titleStr = strrep(titleStr, '_', '\_');
     title(titleStr,'FontSize',fontSize.title);
-%     title(titleStr,'FontSize',titleFontSize*0.8);
     
     xlim([-5,expData(1).time(end)+5])
     set(gca, 'XTick', [0:20:expData(1).time(end)])
 end
-
-%% legend
-% if isempty(options.legendList)
-%     return
-% end
-% 
-% subplot(nSpRow,nSpCol,idSp+1)
-% hold on
-% % set(gca, 'FontSize',legendFontSize*1.2, 'Visible', 'off')
-% for i = 1:nPlotSol+1
-%     if i <= length(options.plotColor{idTypeFlux})
-%         tmpPlotColor = options.plotColor{idTypeFlux}(i);
-%         lineWidth = 2;
-%     else
-%         tmpPlotColor = 'k';
-%         lineWidth = 0.5;
-%     end
-%     plot(1:2, 1:2, tmpPlotColor, 'LineWidth', lineWidth, 'LineStyle', '-')
-% %     plot(1:10, 1:10, tmpPlotColor, 'LineWidth', lineWidth, 'LineStyle', '-', 'Visible', 'off')
-% end
-% xlim([-1e1,1e1])
-% ylim([-1e1,1e1])
-% set(gca, 'Visible', 'off', 'FontSize', fontSize.axis)
-% legend(options.legendList,'Location','SouthWest', 'FontSize',fontSize.legend)
 
 end
 

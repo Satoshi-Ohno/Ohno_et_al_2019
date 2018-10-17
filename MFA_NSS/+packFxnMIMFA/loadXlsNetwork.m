@@ -1,10 +1,5 @@
-%% エクセルデータより情報整理
+%% Load network defined in Excel file
 function model = loadXlsNetwork(model,optionsMFA, fileName)
-%loadXlsNetwork  Load metabolic network defined in Excel file
-% 
-% model = loadXlsNetwork(fileName)
-% 
-% 
 
 %% Load reaction information
 [~,~,rawXlsData] = xlsread(fileName,'Reactions');
@@ -31,17 +26,6 @@ for i = 1 : size(rawXlsData,2);
     end
 end
 nTmpRxns = length(tmpRxnInfo.rxnNames);
-
-% fieldNames = rawXlsData(1,:);
-% rawXlsData = rawXlsData(2:end,:);
-% for i = 1 : size(rawXlsData,2);
-%     switch fieldNames{i}
-%         case {'revSets', 'minInitFlux', 'maxInitFlux'}
-%             model.rxnInfo.(fieldNames{i}) = cell2mat(rawXlsData(:,i));
-%         otherwise
-%         model.rxnInfo.(fieldNames{i}) = rawXlsData(:,i);
-%     end
-% end
 
 nRxns = nTmpRxns + nnz(tmpRxnInfo.isRev);
 rxnInfo.fluxIds = zeros(nRxns,1);
@@ -76,11 +60,9 @@ for i = 1 : nTmpRxns
         tmp = strsplit(tmpRxnInfo.rxns{i});
         tmp = tmp(end:-1:1);
         rxnInfo.rxns{ii} = strjoin(tmp, ' ');
-%         rxnInfo.rxns{ii} = [tmp{:}];
         tmp = strsplit(tmpRxnInfo.carbonTransitions{i});
         tmp = tmp(end:-1:1);
         rxnInfo.carbonTransitions{ii} =strjoin(tmp, ' ');
-%         rxnInfo.carbonTransitions{ii} = [tmp{:}];
         rxnInfo.note(ii) = tmpRxnInfo.note(i);
     else
         ii = ii + 1;
@@ -98,10 +80,7 @@ model.rxnInfo = rxnInfo;
 
 %% Load metabolite information
 [~,~,xlsMetData] = xlsread(fileName,'Metabolites');
-% [N,C] = xlsread(fileName,'Metabolites');
-% xlsMetData = numIcell(N, C, [2,3]);
 colNames = xlsMetData(1,:);
-% fieldNames = xlsMetData(1,:);
 for i = 1 : size(xlsMetData,2)
     switch colNames{i}
         case {'Metabolite IDs'}
@@ -125,22 +104,18 @@ for i = 1 : size(xlsMetData,2)
     end
 end
 
-% model.isPoolMets = logical(cell2mat(model.isPoolMets));
-% model.compt = cell2mat(model.compt);
-% model.isSameEval = cell2mat(model.isSameEval);
-% model.isEvalConc = logical(cell2mat(model.isEvalConc));
-% model.massType = cell2mat(model.massType);
-% model.nCarbonMets = cell2mat(model.nCarbonMets);
-
 model.rxnNames = model.rxnInfo.rxnNames;
 model.rxns = model.rxnInfo.rxns;
 model.mets = model.metInfo.mets;
 nMets = length(model.mets);
 
 
-model.metInfo.compt = zeros(nMets,1)+1;
 model.metInfo.idSameEval = zeros(nMets,1);
 
+% massType
+% 0: simulated
+% 1: always U-13C
+% 2: always U-12C
 model.metInfo.massType = double(model.metInfo.massType);
 model.metInfo.massType(model.metInfo.massType==1) = 2;
 idGlc_ex = find(strcmp({'Glc_ex'}, model.metInfo.mets));
@@ -211,20 +186,6 @@ for i = 1 : nMets
     end
     useMassMat(i,1:model.metInfo.nCarbonMets(i)) = true;
 end
-%     keyboard;
-%     
-%     if isempty(model.metInfo.useMass{i})
-%         continue
-%     end
-%     if isnan(model.metInfo.useMass{i})
-%         continue
-%     end
-%     useMass = strsplit(model.metInfo.useMass{i}, '_');
-%     for j = 1:length(useMass)
-%         tmpMass = str2double(useMass{j}(2:end));
-%         useMassMat(i,tmpMass+1) = true;
-%     end
-% end
 model.metInfo.useMassMat = useMassMat;
 
 %% out of calibration rangeのデータをロード
@@ -232,77 +193,6 @@ model.outCalib.idMets = [];
 model.outCalib.expIds= [];
 model.outCalib.mass = [];
 model.outCalib.time = [];
-
-%%  基質の質量同位体のうちの同位体割合の定義
-% [~,~,rawCell] = xlsread(fileName,'CarbonSource');
-% rawCell = rawCell(2:end,:);
-% for n = 1 : numel(rawCell)
-%     if isnan(rawCell{n})
-%         rawCell{n} = [];
-%     end
-% end
-% 
-% [~,idUnqMet,idRawMet] = unique(rawCell(:,2));
-% nSubs = length(idUnqMet);
-% subsIsoRatio.idMets=zeros(nSubs,1);
-% subsIsoRatio.mets=cell(nSubs,1);
-% subsIsoRatio.mass=cell(nSubs,1);
-% subsIsoRatio.CAtom13C=cell(nSubs,1);
-% subsIsoRatio.isoRatio=cell(nSubs,1);
-% subsIsoRatio.isoMat=cell(nSubs,1);
-% subsIsoRatio.matMDV2IDV=cell(nSubs,1);
-% 
-% % 各代謝物についてまとめる。
-% for m = 1 : length(idUnqMet)    
-%     tmpRawCell = rawCell(idRawMet==m,:);
-%     idMet = find(strcmp(tmpRawCell(1,2), model.mets));
-%     if isempty(idMet)
-%         error('metabolite name of the sheet "SubstrateIsotopomerRatio" is not correct.')
-%     end
-%     subsIsoRatio.idMets(m) = idMet;
-%     subsIsoRatio.mets{m} = model.mets(idMet);
-%     
-%     % 各質量代謝物についてまとめる
-%     [~, idUnqMass, idRawMass]= unique(tmpRawCell(:,3));    
-%     nTmpMDV = length(idUnqMass);
-%     subsIsoRatio.mass{m} = zeros(nTmpMDV,1);
-%     subsIsoRatio.CAtom13C{m} = cell(nTmpMDV,1);
-%     subsIsoRatio.isoRatio{m} = cell(nTmpMDV,1);
-%     for mi = 1 : nTmpMDV
-%         loc = idRawMass == mi;
-%         subsIsoRatio.mass{m}(mi) = str2double(tmpRawCell{idUnqMass(mi),3}(2:end));
-%         subsIsoRatio.CAtom13C{m}{mi} = tmpRawCell(loc,4);
-%         subsIsoRatio.isoRatio{m}{mi} = tmpRawCell(loc,5);
-%     end
-%     mass = subsIsoRatio.mass{m};
-%     
-%     % 今回考慮するすべての同位体の行列を作る。
-%     % 行：同位体、列：炭素原子
-%     % 1のところが13C
-%     CAtom13CList = vertcat(subsIsoRatio.CAtom13C{m}{:});
-%     nIDV = length(CAtom13CList);
-%     CAtomList = unique([CAtom13CList{:}]);
-%     nCarbonAtom = length(CAtomList);    
-%     isoMat = false(nIDV, nCarbonAtom);
-%     for i = 1 : nIDV;
-%         if isempty(CAtom13CList{i})
-%             continue
-%         end
-%         isoMat(i,:) = ismember(CAtomList, CAtom13CList{i});
-%     end
-%     subsIsoRatio.isoMat{m} = isoMat;
-%     
-%     % 質量同位体割合(MDV)から同位体割合 (IDV)を作る行列の作成
-%     nMDV = nCarbonAtom+1;
-%     subsIsoRatio.matMDV2IDV{m} = zeros(nIDV,nMDV);
-%     for mi = 1 : nTmpMDV
-%         locIDV =  sum(isoMat,2)==mass(mi);
-%         tmpRatio = subsIsoRatio.isoRatio{m}{mi};
-%         subsIsoRatio.matMDV2IDV{m}(locIDV,mass(mi)+1) = cell2mat(tmpRatio);
-%     end
-% end
-% 
-% model.metInfo.subsIsoRatio = subsIsoRatio;
 
 end
 

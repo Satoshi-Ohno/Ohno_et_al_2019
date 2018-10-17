@@ -1,27 +1,10 @@
-%% 化学量論行列作成
-function model = makeSMatrix170301(model, optionsMFA)
-%makeSMatrix    化学量論行列作成
-% 
-% model = makeSMatrix(model)
-% 
-% INPUT
-%   model       代謝モデル
-%       rxns        代謝反応式リスト
-%       carbonTrans 骨格炭素の移動リスト
-% 
-% OUTPUT
-%   model       代謝モデル
-%       mets            代謝物リスト
-%       S               化学量論行列
-%       arrowChar       矢印をあらわす文字列
-%       nCarbonMets     代謝物の炭素数リスト
-% 
+%% Make stoichiometrix matrix
+function model = makeSMatrix(model, optionsMFA)
 
 tmpModel = recoverRxnMetInfo(model);
 
-%% 代謝物リストの作成
+%% Metabolite list
 
-% 反応式をスペースで区切る
 arrowChar = '-->';
 rxns = tmpModel.rxns;
 cellRxns = cell(length(rxns),20);
@@ -30,21 +13,18 @@ for j = 1 : length(rxns)
     cellRxns(j,1:length(splitRxn)) = splitRxn;
 end
 
-% 代謝物リストを作成
 isEmptyCell = cellfun('isempty',cellRxns);
 mets = unique(cellRxns(~isEmptyCell));
 mets = mets(~strcmp(mets, {arrowChar}));
 mets = mets(~strcmp(mets, {'+'}));
 mets = mets(~strncmp(mets, {'('}, 1));
-% if length(mets) ~= length(model.mets)
 if ~isempty(setdiff(mets, tmpModel.mets)) || ~isempty(setdiff(tmpModel.mets, mets)) 
     setdiff(mets, tmpModel.mets)
     setdiff(tmpModel.mets, mets)
     error('Metabolite list and/or mass balance equation is not correct.')
-%     mets = model.mets;
 end
 
-%% 骨格炭素の移動リストの整理
+%% Carbon atom transitions
 
 nRxns = length(rxns);
 nMets = length(tmpModel.mets);
@@ -59,22 +39,15 @@ for j = 1 : nRxns
 end
 
 
-%% 化学量論行列と炭素数リストを作成
-% S: 化学量論行列
-% Sorder: 反応jにおいて代謝物iが何番目の基質or生成物か
-% Ssubs: 化学量論行列のうち、基質の係数のみを書いたもの。
-% Sprod: 化学量論行列のうち、生成物の係数のみを書いたもの。
-
+%% Make stoichiometric matrix
 S = zeros(nMets, nRxns);
 Sorder = zeros(nMets, nRxns);
 Ssubs = zeros(nMets, nRxns);
 Sprod = zeros(nMets, nRxns);
-idSynsRxns = cell(nMets, 1);
-% nCarbonMets = zeros(nMets,1);
 for j = 1 : length(rxns)
     tmpOrder = 1;
     posNeg = -1;
-    for i = 1 : size(cellRxns,2);
+    for i = 1 : size(cellRxns,2)
         coef = 1;
         if isempty(cellRxns{j,i})
             break

@@ -168,7 +168,7 @@ if flagFailure == 1
     output.MDVsSim = [];
     output.EMUresult = [];
     output.concs = [];
-    output.knotFluxes = paramStruct.knotFluxes;
+    output.switchTimeFluxes = paramStruct.switchTimeFluxes;
     output.nOdeStep = nOdeStep;
     return
 end
@@ -211,7 +211,7 @@ output.timeSim = querryTime;
 output.MDVsSim = MDVsSim;
 output.EMUresult = result;
 output.concs = paramStruct.pCoefConcs * [querryTime.^0;querryTime.^1;querryTime.^2];
-output.knotFluxes = paramStruct.knotFluxes;
+output.switchTimeFluxes = paramStruct.switchTimeFluxes;
 output.nOdeStep = nOdeStep;
 
 end
