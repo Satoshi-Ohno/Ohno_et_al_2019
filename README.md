@@ -5,8 +5,11 @@ Here we provide the MATLAB source code for metabolic flux analysis under non-ste
 
 # Requirements
 The developmental version of package has been tested on the following systems:
+
 Windows 10
+
 Excel 2016
+
 MATLAB R2017a with Optimization Toolbox
 
 # Set up
