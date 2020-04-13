@@ -25,8 +25,9 @@ This is the package code for Identification of effective flux regulators.
 Please run demo_IEFR.m in the package. Identification of effective flux regulators for glycogen synthase will be performed. Note that only a part of phosphorylation and allosteric effectors are considered as candidate of effective flux regulators.
 
 # Contact
+Satoshi Ohno: sohno@bs.s.u-tokyo.ac.jp
 Shinya Kuroda: skuroda@bs.s.u-tokyo.ac.jp
 
 # Reference
-Satoshi Ohno, Lake-Ee Quek, James R. Krycer, Katsuyuki Yugi, Akiyoshi Hirayama, Satsuki Ikeda, Futaba Shoji, Kumi Suzuki, Tomoyoshi Soga, David E. James, and Shinya Kuroda. Key regulatory mechanisms for insulin-induced changes in glucose metabolism in adipocytes. Submitted.
+Satoshi Ohno, Lake-Ee Quek, James R. Krycer, Katsuyuki Yugi, Akiyoshi Hirayama, Satsuki Ikeda, Futaba Shoji, Kumi Suzuki, Tomoyoshi Soga, David E. James, and Shinya Kuroda. Kinetic trans-omic analysis reveals key regulatory mechanisms for insulin-regulated glucose metabolism in adipocytes. Submitted.
 
