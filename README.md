@@ -1,7 +1,7 @@
 # Overview
 Thus far, most studies for metabolic flux estimation have been done under steady state conditions. Few studies have been done under in vivo-like non-steady state conditions because of technical difficulties in both experiments and mathematical modeling. Furthermore, identification of regulation of glucose metabolism by phosphorylation events and allosteric effects is presently inferred from kinetics of isolated enzymes; consequently, which phosphorylation events and allosteric effectors regulate glucose flux in cells remains unknown. We solved these issues by developing novel mathematical approaches using data from phosphoproteomic and 13C-glucose-labelled metabolomic experiments. We applied the developed approach to insulin-stimulated adipocytes (Ohno et al., submitted)
 
-Here we provide the MATLAB source code for metabolic flux analysis under non-steady-state and identification of flux regulators which contribute to the change in flux through a particular metabolic reaction. Such regulators were denoted “effective flux regulators.”
+Here we provide the MATLAB source code for metabolic flux analysis under non-steady-state and kinetic modelling to identify key regulatory molecules for a reaction and relative contributions of these molecules to flux.
 
 # Requirements
 The developmental version of package has been tested on the following systems:
@@ -10,7 +10,7 @@ Windows 10
 
 Excel 2016
 
-MATLAB R2017a with Optimization Toolbox
+MATLAB R2019a with Optimization Toolbox
 
 # Set up
 Download the package code to your local path (< 1 min)
@@ -18,11 +18,11 @@ Download the package code to your local path (< 1 min)
 # Contents
 ## MFA_NSS
 This is the package code for metabolic flux analysis under non-steady-state.
-Please run demo_MFA_NSS.m in the package. Metabolic flux analysis for simple metabolic network will be performed.
+Please run demo_MFA_NSS1.m and demo_MFA_NSS2.m in the package. Metabolic flux analysis for simple metabolic network will be performed. Your can also change population sizes and maximum nuber of function evaluations for metaheuristic optimization so that you can obtain better fitting results.
 
-## IEFR
-This is the package code for Identification of effective flux regulators.
-Please run demo_IEFR.m in the package. Identification of effective flux regulators for glycogen synthase will be performed. Note that only a part of phosphorylation and allosteric effectors are considered as candidate of effective flux regulators.
+## KineticModeling
+This is the package code for kinetic modeling of flux with regulatory molecules.
+Please run demo_KM.m in the package. Kinetic modeling for phosphofructokinase 1 will be performed. Note that only a part of phosphorylation and allosteric effectors are considered as candidate of regulatory molecule for the reaction.
 
 # Contact
 Satoshi Ohno: sohno@bs.s.u-tokyo.ac.jp
