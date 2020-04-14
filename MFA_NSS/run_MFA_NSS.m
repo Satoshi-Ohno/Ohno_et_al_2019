@@ -1,5 +1,5 @@
-function [sol, model, expData, optionsMFA] =  run_MFA_NSS(xlsModelFileName, expData, optionsMFA)
-%run_MFA_NSS        run metabolic flux analysis under non-steady-state
+function [sol, model, expData, optionsMFA] =  MFA_NSS(model, expData, optionsMFA)
+%MFA_NSS        run metabolic flux analysis under non-steady-state
 % INPUT
 % xlsModelFileName        Excel file name for model
 % expData         Measured data whch is used to calculate wRSS
@@ -11,15 +11,23 @@ function [sol, model, expData, optionsMFA] =  run_MFA_NSS(xlsModelFileName, expD
 % expData       expData wher some fields are added
 % optionsMFA        optionsMFA where some fields are added
 
-import packFxnMIMFA.*
+import packFxnMFANSS.*
 
 %% Load default options
 defaultOptionsMFA = loadDefaultOptionsMFA();
+defaultOptionsOptimMH = defaultOptionsMFA.optionsOptimMH;
 filedNamesInputOptionsMFA = fieldnames(optionsMFA);
 for f = 1 : length(filedNamesInputOptionsMFA)
-    defaultOptionsMFA.(filedNamesInputOptionsMFA{f}) = optionsMFA.(filedNamesInputOptionsMFA{f});
+    defaultOptionsMFA.(filedNamesInputOptionsMFA{f}) = ...
+        optionsMFA.(filedNamesInputOptionsMFA{f});
+end
+filedNamesInputOptionsOptimMH = fieldnames(optionsMFA.optionsOptimMH);
+for f = 1 : length(filedNamesInputOptionsOptimMH)
+    defaultOptionsOptimMH.(filedNamesInputOptionsOptimMH{f}) = ...
+        optionsMFA.optionsOptimMH.(filedNamesInputOptionsOptimMH{f});
 end
 optionsMFA = defaultOptionsMFA;
+optionsMFA.optionsOptimMH = defaultOptionsOptimMH;
 
 if optionsMFA.isRxnDepNSwitchTimes
     optionsMFA.nSwitchTimes = max(optionsMFA.nSwitchTimesNetRxns);
@@ -28,11 +36,7 @@ else
     optionsMFA.patternNSwitchTimes = optionsMFA.nSwitchTimes;
 end
 
-%% load model defined in Excel file
-model.name = strrep(xlsModelFileName, '.xls', '');
-model = loadXlsNetwork(model, optionsMFA, xlsModelFileName);
-
-%% Add information on model
+%% Add information of model
 % Stoichiometic matrix
 model = makeSMatrix(model, optionsMFA);
 
@@ -50,9 +54,8 @@ model = makeNetFluxInfo(model, optionsMFA);
 A = full(model.S(~model.metInfo.isPoolMets, :));
 idInputIndVars = [];
 isInputFullIndVarsConstr = false;
-fxnSelectIndVars = str2func(optionsMFA.fxnName.selectIndVars);
 [idIndVars, idRedandantConstr, Cx, C0, idInvalidIndFluxes] = ...
-    fxnSelectIndVars(A, isInputFullIndVarsConstr, idInputIndVars);
+    selectIndVars(A, isInputFullIndVarsConstr, idInputIndVars);
 model.idIndFluxes = idIndVars;
 model.invS = [C0,Cx];
 
@@ -79,8 +82,7 @@ optionsMFA.idParamMH= ...
 optionsMFA.idParamLocal = ...
     prepIdParam(model, expData, optionsMFA, 'local');
 
-fxnPrepConvertMat = str2func(optionsMFA.fxnName.prepConvertMat);
-optionsMFA.convertMat = fxnPrepConvertMat(model, expData, optionsMFA);
+optionsMFA.transformMat = prepTransformMat(model, expData, optionsMFA);
 
 expData.vecExpConcStruct = makeVecExpConcs(model, expData, optionsMFA);
 
@@ -92,14 +94,14 @@ expData.vecExpConcStruct = makeVecExpConcs(model, expData, optionsMFA);
 [optionsMFA.isIndParams.local, optionsMFA.isRedundantConstrAeq.local] = ...
     identifyIndMFAParams(model, expData, optionsMFA, 'local');
 
-optionsMFA.convertMat = fxnPrepConvertMat(model, expData, optionsMFA);
+optionsMFA.transformMat = prepTransformMat(model, expData, optionsMFA);
 if optionsMFA.isUseQPInMH 
     [optionsMFA.isIndParams.QP, optionsMFA.isRedundantConstrAeq.QP] = ...
         identifyIndMFAParams(model, expData, optionsMFA, 'QP');
 end
 
 %% Options for ODE 
-for i = 1 : length(optionsMFA.optionsODE.activeOptionNames);
+for i = 1 : length(optionsMFA.optionsODE.activeOptionNames)
     tmpOptionName = optionsMFA.optionsODE.activeOptionNames{i};
     if i == 1
         optionsMFA.optionsODE.final  = odeset(tmpOptionName, optionsMFA.optionsODE.(tmpOptionName));
@@ -108,29 +110,24 @@ for i = 1 : length(optionsMFA.optionsODE.activeOptionNames);
     end
 end
 
-disp('MI-MFA start')
+disp('MFA-NSS start')
 if optionsMFA.isRxnDepNSwitchTimes
     disp(['reaction-specific # of time intervals'])
 else
     disp(['# of time intervals: ' num2str(optionsMFA.nSwitchTimes+1) ...
         ' (' num2str(optionsMFA.nSwitchTimes) ' switch times)'])
 end
-
+disp(['# of total parameters: ' num2str(optionsMFA.idParamLocal.nParam)])
+disp(['# of parameters in metaheuristic optimization: ' num2str(optionsMFA.idParamMH.nParam)])
+disp(' ')
 
 %% Initial parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fxnSolveMDVDynamics = str2func(optionsMFA.fxnName.solveMDVDynamics);
-fxnCreateInitParams = str2func(optionsMFA.fxnName.createInitParams);
-[initParams, initScores, nExpData] =  fxnCreateInitParams(...
+[initParams, initScores, nExpData] =  makeInitParams(...
     model, expData,optionsMFA);
 
 expData.nExpData = nExpData;
 optionsMFA.optionsOptimMH.initParams = initParams;
 optionsMFA.optionsOptimMH.initScores = initScores;
-
-optimType =  'metaheuristic';
-objfun =@(params) fxnSolveMDVDynamics(...
-    params, model, expData, optionsMFA, optimType);
-[~,~,sol] = objfun(initParams(:,1));
 
 disp(['Best Score by initial sampling before optimization:' num2str(min(initScores))])
 
@@ -139,9 +136,8 @@ disp(['Best Score by initial sampling before optimization:' num2str(min(initScor
 
 %% Metaheuristic optimization %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 optimType =  'metaheuristic';
-objfun =@(params) fxnSolveMDVDynamics(...
+objfun =@(params) solveMDVDynamics(...
     params, model, expData, optionsMFA, optimType);
-
 disp(' ')
 disp('Metaheuristic optimization by CMA-ES')
 solMH = performOptimMH(model, expData, optionsMFA, objfun, initParams);
@@ -149,7 +145,7 @@ disp(['Best Score by metaheuristic optimization:' num2str(solMH.score)])
 
 %% Local optimization%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 optimType =  'local';
-objfun =@(params) fxnSolveMDVDynamics(...
+objfun =@(params) solveMDVDynamics(...
     params, model, expData, optionsMFA, optimType);
 
 initParamLocal = solMH.paramVector;
@@ -189,19 +185,33 @@ isLogTransform = true;
 isIndParam = true;
 lbMH = optionsMFA.lbMH;
 ubMH = optionsMFA.ubMH;
-fxnParam2vector = str2func(optionsMFA.fxnName.param2vector);
-optionsOptimMH.lb = fxnParam2vector(lbMH, optionsMFA, optimType, isLogTransform, isIndParam);
-optionsOptimMH.ub = fxnParam2vector(ubMH, optionsMFA, optimType, isLogTransform, isIndParam);
+optionsOptimMH.lb = param2vector(lbMH, optionsMFA, optimType, isLogTransform, isIndParam);
+optionsOptimMH.ub = param2vector(ubMH, optionsMFA, optimType, isLogTransform, isIndParam);
 
+%% Setting initial points for CMA-ES
+% mean
+meanInitParams = mean(initParams, 2);
+
+% covariance matrix
+tmpCov = cov(initParams');
+diagCov = diag(tmpCov);
+tmpSigma = sqrt(diagCov);
+
+[V,D] = eig(tmpCov);
+diagD = diag(D);
+epsilon = 1e-12;
+diagD(diagD<=epsilon) = epsilon;
+D = diag(diagD);
+tmpCov_old = tmpCov;
+tmpCov = V * D * inv(V);
 
 %% Setting options of CMA-ES
-tmpSigma = sqrt(var(initParams,[],2));
-
-objfunStr = optionsMFA.fxnName.solveMDVDynamics;
-fxnSolveMDVDynamics = str2func(objfunStr);
-objfun =@(params) fxnSolveMDVDynamics(...
-    params, model, expData, optionsMFA, optimType);
-sigmaCMAES = tmpSigma;
+objfunStr = 'solveMDVDynamics';
+if optionsOptimMH.isUseInitCovMat
+    sigmaCMAES = tmpCov;
+else
+    sigmaCMAES = tmpSigma;
+end
 varaginCMAES{1} = model;
 varaginCMAES{2} = expData;
 varaginCMAES{3} = optionsMFA;
@@ -219,7 +229,7 @@ end
 %% Run metaheuristic optimization
 [solMHRaw.bestParam, solMHRaw.bestScore, ...
     solMHRaw.couteval, solMHRaw.stopflag,solMHRaw.out,solMHRaw.bestever] = ...
-    cmaes(objfunStr, initParams, sigmaCMAES, optionsCMAES, varaginCMAES{:});
+    cmaes_modified(objfunStr, meanInitParams, sigmaCMAES, optionsCMAES, varaginCMAES{:});
 
 %% Final solution of metaheuristic optimization
 [~,~,solMH] = objfun(solMHRaw.bestever.x);
@@ -237,9 +247,8 @@ isIndParam = true;
 lbLocal = optionsMFA.lbLocal;
 ubLocal = optionsMFA.ubLocal;
 
-fxnParam2vector = str2func(optionsMFA.fxnName.param2vector);
-optionsOptimLocal.lb = fxnParam2vector(lbLocal, optionsMFA, optimType, isLogTransform, isIndParam);
-optionsOptimLocal.ub = fxnParam2vector(ubLocal, optionsMFA, optimType, isLogTransform, isIndParam);
+optionsOptimLocal.lb = param2vector(lbLocal, optionsMFA, optimType, isLogTransform, isIndParam);
+optionsOptimLocal.ub = param2vector(ubLocal, optionsMFA, optimType, isLogTransform, isIndParam);
 
 %% Initial parameters
 initParamLocal = initParamLocal(optionsMFA.isIndParams.local);
@@ -267,10 +276,8 @@ nonlcon = @(paramLocal) makeNonLinConstrFmincon(model, expData, optionsMFA, para
 
 %% options for fmincon
 nParamLocal = length(optionsOptimLocal.initParams);
-  
-nMaxEvalLocalOpt = max([...
-    optionsOptimLocal.nMaxEvalLocalOpt, ...
-    ceil(optionsMFA.optionsOptimMH.nMaxEval/10)]);
+
+nMaxEvalLocalOpt = optionsOptimLocal.nMaxEvalLocalOpt;
 optionsFmincon = optimset('Display', 'Iter',...
     'MaxIter', 10^4, 'MaxFunEvals', nMaxEvalLocalOpt,...
     'TolX', 10^-9);
@@ -288,7 +295,6 @@ disp([' Maximum number of evaluation: ' num2str(nMaxEvalLocalOpt)])
     A, b, Aeq, beq, ...
     optionsOptimLocal.lb, optionsOptimLocal.ub, nonlconFmincon, optionsFmincon);
 
-
 disp(' ')
 disp('Calculating jacobian..')
 optionsCalcJacobian.evalFxnType = 'obj';
@@ -296,7 +302,6 @@ try
     optionsCalcJacobian.diffType = {'central', 'forward'};
     tmpSol.jacobian = calcJacobian(objfunRes, solLocalRaw.params, ...
         optionsOptimLocal.lb, optionsOptimLocal.ub, optionsCalcJacobian);
-%     save(optionsMFA.saveFileName,'optionsCalcJacobian','-append')
 catch err
     tmpSol.jacobian = [];
 end
@@ -325,8 +330,7 @@ optimType = 'local';
 
 isInputIndVars = true;
 isInputFullIndVarsConstr= true;
-fxnPrepQpModel = str2func(optionsMFA.fxnName.prepQpModel);
-[qpModel] = fxnPrepQpModel(model, expData, optionsMFA,  ...
+[qpModel] = prepQpModel(model, expData, optionsMFA,  ...
     optimType, initParamLocal,isInputIndVars, isInputFullIndVarsConstr);
 
 end
@@ -338,8 +342,7 @@ optimType = 'localNonLinConstr';
 
 isInputIndVars = true;
 isInputFullIndVarsConstr= true;
-fxnPrepQpModel = str2func(optionsMFA.fxnName.prepQpModel);
-[qpModel] = fxnPrepQpModel(model, expData, optionsMFA,  ...
+[qpModel] = prepQpModel(model, expData, optionsMFA,  ...
     optimType, paramLocal,isInputIndVars, isInputFullIndVarsConstr);
 
 C = qpModel.A * paramLocal - qpModel.b;

@@ -1,7 +1,8 @@
 %% Simulation of EMU
-function output =  solveEMUDynamics170809(paramStruct, model, expData, optionsMFA, preSol)
+function output =  solveEMUDynamics(paramStruct, model, expData, optionsMFA, preSol)
 
-field2var(optionsMFA.varSet)
+nMets = optionsMFA.varSet.nMets;
+nRxns = optionsMFA.varSet.nRxns;
 
 querryTime = paramStruct.querryTime;
 flagFailure = 0;
@@ -47,7 +48,6 @@ for s = 1 : length(model.emuNetwork)
     paramStruct.B1 = B1;
     paramStruct.Sv0 = Sv0;
     paramStruct.Sv1 = Sv1;
-%     clear A B Sv
     
     %% polinomial coefficient of metabolite concentrations
     paramStruct.tmpPCoefConcs = paramStruct.pCoefConcs([arrayMakeA.idMet],:);
@@ -265,6 +265,10 @@ paramsODE.t = params.t;
 
 
 options=optionsODE.final;
+
+JPattern =  paramsODE.A0~=0 | paramsODE.A1~=0;
+JPattern = sparse(JPattern);
+options  = odeset(options, 'JPattern', JPattern);
 
 [sol.x, sol.y]= odeFunc(@(t,X) myode(t,X, paramsODE, sizeEmu), querryTime, initX, options);
 

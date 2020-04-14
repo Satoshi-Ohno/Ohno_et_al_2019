@@ -1,6 +1,6 @@
 %%     Select independent variables
 function [idIndVars, idRedundantConstr,  Cx, C0, idInvalidIndVars] = ...
-    selectIndFluxes(A, isInputFullIndVarsConstr, idInputIndVars, idInputRedundantConstr)
+    selectIndVars(A, isInputFullIndVarsConstr, idInputIndVars, idInputRedundantConstr)
 
 if nargin<=3
     idInputRedundantConstr= [];

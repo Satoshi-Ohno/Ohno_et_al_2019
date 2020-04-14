@@ -1,7 +1,7 @@
 %% Draw scatter plots of input and estimated fluxes
-function figH = drawScatterInputVsEstimatedFlux(solKAMinAIC, solKANoReg, optionsKA)
+function figH = drawScatterInputVsEstimatedFlux(solKAMinAIC, solKANoReg, optionsKM)
 
-timeKinetic = optionsKA.timeKinetic;
+timeKinetic = optionsKM.timeKinetic;
 nKineticTime = length(timeKinetic);
 
 fontSize.axis = 10;
@@ -25,7 +25,7 @@ for i = 1 : 2
     else
         tmpSol = solKAMinAIC;
     end
-    normExpData = optionsKA.normExpData;
+    normExpData = optionsKM.normExpData;
     locFlux = strcmp('flux', {normExpData.regulatorType});
     fluxMFA = colVec(normExpData(locFlux).level)';
     fluxEst = colVec(tmpSol.fluxEst)';

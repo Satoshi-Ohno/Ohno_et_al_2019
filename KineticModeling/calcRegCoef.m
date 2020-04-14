@@ -1,8 +1,8 @@
 %% Calculation of regulation coefficient
-function [regCoef, regCoefFxn] = calcRegCoef(solMinAIC, optionsIEFR);
+function [regCoef, regCoefFxn] = calcRegCoef(solMinAIC, optionsKM);
 
 
-timeKinetic = optionsIEFR.timeKinetic;
+timeKinetic = optionsKM.timeKinetic;
 nTimeKinetic = length(timeKinetic);
 
 fxnRegulatorNames = {'phospho', 'alloAI', 'subsProdMet', 'unaccounted'};
@@ -12,7 +12,7 @@ legendList = {'\rho_{P}', '\rho_{A}', ...
 idList = 1:nTimeKinetic*2;
 timeRho = timeKinetic(1:nTimeKinetic);
 
-paramInfoAll = optionsIEFR.paramInfo;
+paramInfoAll = optionsKM.paramInfo;
 paramInfo = solMinAIC.paramInfo;
 
 %% Prepare output

@@ -1,5 +1,5 @@
 %% Add constraints for lower and upper bounds of variables
-function qpModel = modifyQPModelWithLbUb180116(model, expData, optionsMFA, qpModel, Cx, C0)
+function qpModel = modifyQPModelWithLbUb(model, expData, optionsMFA, qpModel, Cx, C0)
 if isempty(qpModel.lb) 
     return
 end

@@ -1,12 +1,11 @@
 function paramMH = paramLocal2ParamMH(model, expData, optionsMFA, paramLocal)
 
-field2var(optionsMFA.varSet)
-convertMat = optionsMFA.convertMat;
+transformMat = optionsMFA.transformMat;
 
 %% paramLocal -> paramMH
-paramMH = convertMat.paramLocal2ParamMH * paramLocal;
+paramMH = transformMat.paramLocal2ParamMH * paramLocal;
 
 %% log transformation
-paramMH(convertMat.isLogParamMH) = log10(paramMH(convertMat.isLogParamMH));
+paramMH(transformMat.isLogParamMH) = log10(paramMH(transformMat.isLogParamMH));
 
 end

@@ -1,9 +1,13 @@
-%% Simulate MDV
+%% Simulate mass isotopomer fractions (MDV)
 function [score, scoreMet, sol, residual] = ...
     solveMDVDynamics(paramVector, model, expData, optionsMFA, optimType)
 
 warning off
-field2var(optionsMFA.varSet)
+nEvalMDVMets = optionsMFA.varSet.nEvalMDVMets;
+nSwitchTimes = optionsMFA.varSet.nSwitchTimes;
+nNonPoolMets = optionsMFA.varSet.nNonPoolMets;
+nMets = optionsMFA.varSet.nMets;
+nRxns = optionsMFA.varSet.nRxns;
 idParamLocal = optionsMFA.idParamLocal;
 nParamLocal = idParamLocal.nParam;
 if nargin<=5
@@ -48,52 +52,47 @@ switch optimType
     otherwise
         tmpOptimType = optimType;
 end
-fxnParamInd2LocalFull = str2func(optionsMFA.fxnName.paramInd2LocalFull);
-[paramLocal, convertMat] = fxnParamInd2LocalFull(model, expData, optionsMFA, paramVector, tmpOptimType);
+[paramLocal, transformMat] = paramInd2LocalFull(model, expData, optionsMFA, paramVector, tmpOptimType);
 if isempty(paramLocal)
     return
 end
-optionsMFA.convertMat = convertMat;
+optionsMFA.transformMat = transformMat;
 
 %% Flux
-fxnVector2param = str2func(optionsMFA.fxnName.vector2param);
-[switchTimeFluxes, initConcs, switchTimeConcRates, switchTimes] = ...
-    fxnVector2param(paramLocal, model, expData, optionsMFA);
+paramStruct = vector2paramStruct(paramLocal, model, expData, optionsMFA);
+field2var(paramStruct)
 if isempty(switchTimeFluxes)
     return
 end
 
-if any(any(switchTimeFluxes < optionsMFA.lbLocal.switchTimeFluxesAll*(1-10^-3)))|| ...
-        any(any(switchTimeFluxes > optionsMFA.ubLocal.switchTimeFluxesAll*(1+10^-3)))
+if any(any(switchTimeFluxes < optionsMFA.lbLocal.switchTimeFluxesAll*(1-10^-6)))|| ...
+        any(any(switchTimeFluxes > optionsMFA.ubLocal.switchTimeFluxesAll*(1+10^-6)))
     return
 end
 
 
 %% Metabolite concentrations
-concs = convertMat.param2Conc * paramLocal; 
-
-nTmpConstr = size(convertMat.param2Conc, 1);
-tmpLb = diag(optionsMFA.lbLocal.initConcs)*ones(nNonPoolMets, optionsMFA.nStepTimeConstrQP);
-
+concsQP = transformMat.param2ConcQP * paramLocal;
+lbConcs = min(optionsMFA.lbLocal.switchTimeConcs, [],2);
+tmpLb = diag(lbConcs)*ones(nNonPoolMets, optionsMFA.nStepTimeConstrQP);
 tmpLb = tmpLb/optionsMFA.paramBoundExpandRatio;
-if any(concs < reshape(tmpLb', nTmpConstr, 1)*(1-10^-3))
+tmpLb = tmpLb';
+if any(concsQP < tmpLb(:)*(1-10^-6))
+    return
+end
+ubConcs = min(optionsMFA.ubLocal.switchTimeConcs, [],2);
+tmpUb = diag(ubConcs)*ones(nNonPoolMets, optionsMFA.nStepTimeConstrQP);
+tmpUb = tmpUb*optionsMFA.paramBoundExpandRatio;
+tmpUb = tmpUb';
+if any(concsQP > tmpUb(:)*(1+10^-6))
     return
 end
 
-concsAns = reshape(concs, optionsMFA.nStepTimeConstrQP, nNonPoolMets)';
-initConcsTest = concsAns(:,1);
-initConcsAns = convertMat.param2InitConc * paramLocal;
-
-%% polynomial coefficient of metabolite concetnrations
-pCoefConcs = convertMat.param2pCoefConc*paramLocal;
-pCoefConcs = reshape(pCoefConcs, nNonPoolMets, 3*(nSwitchTimes+1));
-
-
-%% polynomial coefficient of flux
-
-pCoefFluxes = convertMat.param2pCoefFlux * paramLocal;
-pCoefFluxes = reshape(pCoefFluxes,nRxns, 2*(nSwitchTimes+1));
-
+%% Concentration changes over time
+if any(any(switchTimeConcRates < optionsMFA.lbLocal.switchTimeConcRates*(1-10^-6)))|| ...
+        any(any(switchTimeConcRates > optionsMFA.ubLocal.switchTimeConcRates*(1+10^-6)))
+    return
+end
 
 %% Prepare EMU simulation
 for k = 1 : nSwitchTimes + 1
@@ -118,17 +117,17 @@ for k = 1 : nSwitchTimes + 1
         querryTime = sort(unique([querryTime, timeSpan(2:end-1)]));
     end
     
-    tmpParamStruct.switchTimeFluxes = switchTimeFluxes(:,k+(0:1));
-    tmpParamStruct.switchTimes = switchTimes;
-    tmpParamStruct.pCoefConcs = pCoefConcs(:, (k-1)*3+(1:3));
-    tmpParamStruct.pCoefFluxes = pCoefFluxes(:, (k-1)*2+(1:2));
-    tmpParamStruct.querryTime= querryTime;
+    tmpParamStructTI.switchTimeFluxes = switchTimeFluxes(:,k+(0:1));
+    tmpParamStructTI.switchTimes = switchTimes;
+    tmpParamStructTI.pCoefConcs = pCoefConcs(:, (k-1)*3+(1:3));
+    tmpParamStructTI.pCoefFluxes = pCoefFluxes(:, (k-1)*2+(1:2));
+    tmpParamStructTI.querryTime= querryTime;
     
-    concsQuerryTime = tmpParamStruct.pCoefConcs*[querryTime.^0; querryTime.^1; querryTime.^2];
+    concsQuerryTime = tmpParamStructTI.pCoefConcs*[querryTime.^0; querryTime.^1; querryTime.^2];
     if any(any(concsQuerryTime < repmat(optionsMFA.lbLocal.initConcs/10, 1, length(querryTime))))
         return
     end
-    paramStruct(k) = tmpParamStruct;
+    paramStructTI(k) = tmpParamStructTI;
 end
 
 
@@ -136,13 +135,11 @@ end
 %% Simulate EMU
 nTimeSim = zeros(1,nSwitchTimes+1);
 
-fxnSoveEMUDynamics = str2func(optionsMFA.fxnName.solveEMUDynamics);
 for k = 1 : nSwitchTimes + 1
-    try
         if k == 1
-            output(k) = fxnSoveEMUDynamics(paramStruct(k), model, expData, optionsMFA, []);
+            output(k) = solveEMUDynamics(paramStructTI(k), model, expData, optionsMFA, []);
         else
-            output(k) = fxnSoveEMUDynamics(paramStruct(k), model, expData, optionsMFA, output(k-1));
+            output(k) = solveEMUDynamics(paramStructTI(k), model, expData, optionsMFA, output(k-1));
         end
         if isempty(output(k))
             return
@@ -151,16 +148,13 @@ for k = 1 : nSwitchTimes + 1
         if isempty(output(k).concs)
             return
         end
-        if any(output(k).concs(:,end)<0) || output(k).timeSim(end) < paramStruct(k).querryTime(end)
+        if any(output(k).concs(:,end)<0) || output(k).timeSim(end) < paramStructTI(k).querryTime(end)
             return
         end
-    catch err
-        return
-    end
 end
 
 
-%% merge results
+%% Merge results
 
 MDVsSim = cell(nNonPoolMets, 1);
 for m = 1 : nMets
@@ -193,21 +187,17 @@ else
 end
 concs = [output.concs];
 
-% concMDVs = cell(size(MDVsSim));
-% for m = 1 : nNonPoolMets
-%         concMDVs{m} = MDVsSim{m} .* repmat(concs(m,:),size(MDVsSim{m},1),1);
-%         concMDVs{m} = single(concMDVs{m});
-% end
-
 sol.switchTimeFluxes = switchTimeFluxes;
 sol.netFluxes = model.matRaw2Net*switchTimeFluxes; 
 sol.switchTimes = switchTimes;
 sol.MDVsSim = MDVsSim;
 sol.concs = single(concs);
-% sol.concMDVs = concMDVs;
-sol.initConcs = initConcs;
+sol.initConcs = paramStruct.initConcs;
+sol.switchTimeConcs = paramStruct.switchTimeConcs;
+sol.initConcRates = paramStruct.initConcs;
 sol.switchTimeConcRates = switchTimeConcRates;
-sol.pCoefConcs = pCoefConcs;
+sol.pCoefConcs = paramStruct.pCoefConcs;
+sol.pCoefFluxes= paramStruct.pCoefFluxes;
 sol.timeSim = timeSim;
 
 %% RSS

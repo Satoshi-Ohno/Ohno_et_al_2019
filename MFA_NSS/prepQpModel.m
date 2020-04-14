@@ -1,26 +1,26 @@
-function [qpModel, convertMat, qpModelConstr] = prepQpModel180104(model, expData, optionsMFA,  ...
+function [qpModel, transformMat, qpModelConstr] = prepQpModel(model, expData, optionsMFA,  ...
     optimType, paramInd,isInputIndVars, isInputFullIndVarsConstr)
 
 import packFxnPrepQpModel.*
 
 optimTypeInit = 'init';
-convertMat = optionsMFA.convertMat;
+transformMat = optionsMFA.transformMat;
 if isInputFullIndVarsConstr
     switch optimType
         case {'init', 'metaheuristic'}
-                paramMHLin(convertMat.isLogParamMH) = 10.^paramInd(convertMat.isLogParamMH);
+                paramMHLin(transformMat.isLogParamMH) = 10.^paramInd(transformMat.isLogParamMH);
         case {'local', 'localNonLinConstr'}
             paramMHLin = [];
         case {'QP'}
-            isLogParamMHInd = convertMat.isLogParamMH(optionsMFA.isIndParams.MH);
+            isLogParamMHInd = transformMat.isLogParamMH(optionsMFA.isIndParams.MH);
             paramMHLin(isLogParamMHInd) = 10.^paramInd(isLogParamMHInd);
     end
 else
     switch optimType
         case {'init', 'metaheuristic', 'local', 'localNonLinConstr'}
-            paramMHLin(convertMat.isLogParamMH) = 10.^paramInd(convertMat.isLogParamMH);
+            paramMHLin(transformMat.isLogParamMH) = 10.^paramInd(transformMat.isLogParamMH);
         case {'QP'}
-            isLogParamMHInd = convertMat.isLogParamMH(optionsMFA.isIndParams.MH);
+            isLogParamMHInd = transformMat.isLogParamMH(optionsMFA.isIndParams.MH);
             paramMHLin(isLogParamMHInd) = 10.^paramInd(isLogParamMHInd);
     end
 end
@@ -58,9 +58,8 @@ end
 fullSwitchTimes = [0, switchTimes', expData.time(end)];
 
 %% Make QP model
-fxnPrepConvertMatDepSwitchTimes = str2func(optionsMFA.fxnName.prepConvertMatDepSwitchTimes);
-convertMat = fxnPrepConvertMatDepSwitchTimes(model, expData, optionsMFA, fullSwitchTimes);
-optionsMFA.convertMat = convertMat;
+transformMat = prepTransformMat(model, expData, optionsMFA, fullSwitchTimes);
+optionsMFA.transformMat = transformMat;
 
 qpModel =  makeQPModelOri(model, expData, optionsMFA, switchTimes, optimTypeInit);
 
@@ -70,10 +69,10 @@ if isInputFullIndVarsConstr
         case {'local'}
             nSwitchTimes = optionsMFA.varSet.nSwitchTimes;
             
-            if nSwitchTimes >=1
+            if optionsMFA.isUseConcAsParam
+                idConstrFmincon = [];
+            else
                 idConstrFmincon = [qpModel.idQPConstr.flux1, qpModel.idQPConstr.flux2];
-            else 
-                idConstrFmincon = [qpModel.idQPConstr.concs, qpModel.idQPConstr.flux1, qpModel.idQPConstr.flux2];
             end
             qpModel.A = qpModel.A(idConstrFmincon, :);
             qpModel.b = qpModel.b(idConstrFmincon);
@@ -99,7 +98,18 @@ if isInputFullIndVarsConstr
                 qpModel.b = [qpModel.b;bKnotTime];
             end
         case {'localNonLinConstr'}
-            idConstrFmincon = [qpModel.idQPConstr.concs];
+            if optionsMFA.isUseConcAsParam
+                idConstrFmincon = [...
+                    qpModel.idQPConstr.concs1,...
+                    qpModel.idQPConstr.concs2,...
+                    qpModel.idQPConstr.concRates1,...
+                    qpModel.idQPConstr.concRates2,...
+                    qpModel.idQPConstr.flux1,...
+                    qpModel.idQPConstr.flux2,...
+                    ];
+            else
+                idConstrFmincon = [qpModel.idQPConstr.concs1, qpModel.idQPConstr.concs2];
+            end
             qpModel.A = qpModel.A(idConstrFmincon, :);
             qpModel.b = qpModel.b(idConstrFmincon);
     end
@@ -108,13 +118,23 @@ end
 %% Add mass balance constraints
 qpModel = modifyQPModelMassBalance(model, expData, optionsMFA, qpModel, optimType);
 
-%% Add constrainsf for reaction dependent number of time intervals
+%% Add constraints for steady state at initial time
+if ~isempty(optionsMFA.idComptInitSteadyState)
+    qpModel = modifyQPModelInitSteadyState(model, expData, optionsMFA, qpModel, optimType);
+end
+
+%% Add constraints for reaction dependent number of time intervals
 if optionsMFA.isRxnDepNSwitchTimes
     qpModel = modifyQPModelConstrRxnDepNSwitchTimes(model, expData, optionsMFA, ...
         qpModel, optimTypeInit);
 end
 
-%% Add constrain for paramMH
+%% Add constraints for the same initial metabolite concentrations and fluxes between Ins and Ctrl
+if optionsMFA.isSameInitInsCtrl
+    qpModel = modifyQPModelSameInitInsCtrl(model, expData, optionsMFA, qpModel, optimType);
+end
+
+%% Add constraints for paramMH
 switch optimType
     case {'init', 'QP'}
         qpModel = modifyQPModelWithParamMH(model, expData, optionsMFA, ...
@@ -127,7 +147,6 @@ qpModelConstr = qpModel;
 qpModel = modifyQPModelWithLbUb(model, expData, optionsMFA, qpModel, optimType);
 
 %% Identify independent parameters from Aeq
-fxnSelectIndVars = str2func(optionsMFA.fxnName.selectIndVars);
 if isInputFullIndVarsConstr
     switch optimType
         case {'local', 'localNonLinConstr'}
@@ -147,7 +166,7 @@ if isInputFullIndVarsConstr
         C0 = [];
     else
         [idIndVars, idRedundantConstr, Cx, C0] = ...
-            fxnSelectIndVars(full(qpModel.Aeq), isInputFullIndVarsConstr, idInputIndVars, idInputRedundantConstr);
+            selectIndVars(full(qpModel.Aeq), isInputFullIndVarsConstr, idInputIndVars, idInputRedundantConstr);
     end
     
      
@@ -159,7 +178,7 @@ else
         C0 = [];
     else
         [idIndVars, idRedundantConstr, Cx, C0] = ...
-            fxnSelectIndVars(full(qpModel.Aeq), isInputFullIndVarsConstr, []);
+            selectIndVars(full(qpModel.Aeq), isInputFullIndVarsConstr, []);
     end
     
         switch optimType
@@ -169,28 +188,37 @@ else
                 nSwitchTimes = optionsMFA.varSet.nSwitchTimes;
                 nIndFluxes = optionsMFA.varSet.nIndFluxes;
                 
-                idParamKnotConcRates = reshape(idParamLocal.switchTimeConcRates, nNonPoolMets, nSwitchTimes+2);
-                idParamKnotFluxes = reshape(idParamLocal.switchTimeFluxes, nIndFluxes, nSwitchTimes+2);
-                orderVar{1} = [...
-                    idParamLocal.initConcs,...
-                    idParamKnotConcRates(:,1)',...
-                    idParamKnotConcRates(:,end)',...
-                    idParamKnotFluxes(:,1)',...
-                    idParamKnotFluxes(:,end)',...
-                    idParamLocal.switchTimes,...
-                    ];
-                if nSwitchTimes >= 1
-                    orderVar{1} = [orderVar{1},...
-                        reshape(idParamKnotConcRates(:,2:end-1), nNonPoolMets*nSwitchTimes, 1)',...
-                        reshape(idParamKnotFluxes(:,2:end-1), nIndFluxes*nSwitchTimes, 1)',...
+                if optionsMFA.isUseConcAsParam
+                    orderVar{1} = [...
+                        idParamLocal.concs,...
+                        idParamLocal.initConcRates,...
+                        idParamLocal.fluxes,...
+                        idParamLocal.switchTimes,...
                         ];
+                else
+                    idParamConcRates = reshape(idParamLocal.concRates, nNonPoolMets, nSwitchTimes+2);
+                    idParamFluxes = reshape(idParamLocal.fluxes, nIndFluxes, nSwitchTimes+2);
+                    orderVar{1} = [...
+                        idParamLocal.initConcs,...
+                        idParamConcRates(:,1)',...
+                        idParamConcRates(:,end)',...
+                        idParamFluxes(:,1)',...
+                        idParamFluxes(:,end)',...
+                        idParamLocal.switchTimes,...
+                        ];
+                    if nSwitchTimes >= 1
+                        orderVar{1} = [orderVar{1},...
+                            reshape(idParamConcRates(:,2:end-1), nNonPoolMets*nSwitchTimes, 1)',...
+                            reshape(idParamFluxes(:,2:end-1), nIndFluxes*nSwitchTimes, 1)',...
+                            ];
+                    end
                 end
                 if ~isempty(qpModel.Aeq)
                     orderVar{1} =  orderVar{1}(end:-1:1);
                     orderConstr{1} = 1:size(qpModel.Aeq,1);
                     for i = 1 : length(orderVar)
                         [tmpIdIndVars, tmpIdRedundantConstr, Cx, C0] = ...
-                            fxnSelectIndVars(full(qpModel.Aeq(orderConstr{i}, orderVar{i})), isInputFullIndVarsConstr, []);
+                            selectIndVars(full(qpModel.Aeq(orderConstr{i}, orderVar{i})), isInputFullIndVarsConstr, []);
                         isIndVars = false(size(qpModel.Aeq, 2),1);
                         isIndVars(tmpIdIndVars) = true;
                         [~, idSort] = sort(orderVar{i});
@@ -211,7 +239,9 @@ end
 qpModel.idIndVars = idIndVars;
 qpModel.idRedundantConstr = idRedundantConstr;
 
-%% Remove Aeq and 
+%% Remove Aeq 
+tmpQpModel = qpModel;
+qpModel = tmpQpModel;
 qpModel = modifyQPModelRmAeq(model, expData, optionsMFA, qpModel, Cx, C0);
 
 

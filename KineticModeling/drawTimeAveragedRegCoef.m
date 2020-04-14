@@ -1,5 +1,5 @@
 %% Draw bar graph of time-averaged regulation coefficient
-function figH = drawTimeAveragedRegCoef(regCoefFxn, optionsKA)
+function figH = drawTimeAveragedRegCoef(regCoefFxn, optionsKM)
 
 fxnRegulatorNames  = regCoefFxn.fxnRegulatorNames;
 legendList = regCoefFxn.legendList;
@@ -14,7 +14,7 @@ nFig = 0;
 nFig = nFig+1;
 figH(nFig) = figure('Color', 'w');
 
-titleStr = ['Time-averaged regulation coefficient'];
+titleStr = ['Time-averaged regulation coefficients'];
 colMatFxnReg = [
     0,1,0; % green: phosphorylation
     1,0,0; % redÅFallostery

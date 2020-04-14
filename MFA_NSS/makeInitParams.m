@@ -3,7 +3,7 @@ function [params, scores, nExpData] = createInitParams171226(model, expData,opti
 
 field2var(optionsMFA.varSet)
 
-popSize = optionsMFA.optionsOptimMH.popSize;
+initPopSize = optionsMFA.optionsOptimMH.initPopSize;
 idParamMH = optionsMFA.idParamMH;
 nParamMH = idParamMH.nParam;
 nParamMHInd = nnz(optionsMFA.isIndParams.MH);
@@ -12,17 +12,15 @@ ubInit = optionsMFA.ubInit;
 optimType = 'init';
 
 %% Set objective function
-fxnSolveMDVDynamics = str2func(optionsMFA.fxnName.solveMDVDynamics);
-objfunMH =@(params) fxnSolveMDVDynamics(...
+objfunMH =@(params) solveMDVDynamics(...
     params, model, expData, optionsMFA, 'metaheuristic');
-objfunLocal =@(params) fxnSolveMDVDynamics(...
+objfunLocal =@(params) solveMDVDynamics(...
     params, model, expData, optionsMFA, 'local');
 
 
 %% Make initial parameters%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 disp('Making initial parameters')
 p = 1;
-initPopSize = popSize;
 params = zeros(nParamMHInd,initPopSize);
 scores = zeros(1,initPopSize);
 nFailureParamConstr = 0;
@@ -30,7 +28,7 @@ nFailureODE = 0;
 ii  = 1;
 while p <= initPopSize
     nFailureLimit = max([10^5, initPopSize*10^4]);
-    if nFailureParamConstr >= nFailureLimit;
+    if nFailureParamConstr >= nFailureLimit
         error(['Initial parameter sets were not found within ' num2str(nFailureLimit) ' trials'])
     end
     
@@ -50,41 +48,75 @@ while p <= initPopSize
     
     tmpParamMH(idParamMH.switchTimes) = log10(switchTimes);
     
+    %% Metabolite concentration
+    if optionsMFA.isUseConcAsParam
+        log10Range = log10(ubInit.switchTimeConcs)-log10(lbInit.switchTimeConcs);
+        concs = 10.^(log10Range.*rand(size(ubInit.switchTimeConcs))+log10(lbInit.switchTimeConcs));
+        if optionsMFA.isSameInitInsCtrl
+            concs(nNonPoolMets/2 + (1:nNonPoolMets/2),1) = concs(1:nNonPoolMets/2,1);
+        end
+        tmpParamMH(idParamMH.concs) = log10(concs(:));
+    end
+    
     %% Make QP model
     isInputIndVars = false;
     isInputFullIndVarsConstr= true;
-    fxnPrepQpModel = str2func(optionsMFA.fxnName.prepQpModel);
-    [qpModel, qpModelConstr] = fxnPrepQpModel(model, expData, optionsMFA,  ...
+    [qpModel, qpModelConstr] = prepQpModel(model, expData, optionsMFA,  ...
         optimType, tmpParamMH,isInputIndVars, isInputFullIndVarsConstr);
 
     %% Modify objective function of QP
     isMinVar = false;
-    fxnModifyQPModelObjFun = str2func(optionsMFA.fxnName.modifyQPModelObjFun);
-    qpModel = fxnModifyQPModelObjFun(model, expData, optionsMFA, qpModel, isMinVar);
+    qpModel = modifyQPModelObjFun(model, expData, optionsMFA, qpModel, isMinVar);
     
     %% Solve QP to fit metabolite concentrations
     [qpSol, qpScore,exitFlag] = solveQP(qpModel);
     tmpParamInitInd = qpSol;
-
-
+    if isempty(qpSol)
+        continue
+    end
+    if exitFlag == -2
+        continue        
+    end
+    
+    %% Sample parameters uniformly under linear constraints
+    try
+        tmpParamInitInd = smplParamsUnderLinConstr(model, expData, optionsMFA, qpModel, tmpParamInitInd);
+    catch err
+        tmpParamInitInd = [];
+    end
+    if isempty(tmpParamInitInd)
+        nFailureParamConstr = nFailureParamConstr + 1;
+        continue
+    end
     
     %% paramLocal to paramMH
     tmpParamLocalFull = qpModel.L * tmpParamInitInd + qpModel.m;
+    optionsMFA.transformMat = prepTransformMat(model, expData, optionsMFA, fullSwitchTimes);
+    tmpParamStruct = vector2paramStruct(tmpParamLocalFull, model, expData, optionsMFA);
+    testConcsExpTime = optionsMFA.transformMat.param2ConcExpTime * tmpParamLocalFull;
+    testConcsExpTime = reshape(testConcsExpTime, nExpTime, optionsMFA.varSet.nEvalConcMets)';
+    testConcsQP = optionsMFA.transformMat.param2ConcQP* tmpParamLocalFull;
+    testConcsQP = reshape(testConcsQP, optionsMFA.nStepTimeConstrQP,nNonPoolMets)';
+    
     tmpParamMHFull = paramLocal2ParamMH(model, expData, optionsMFA, tmpParamLocalFull);
     if optionsMFA.isUseQPInMH
         tmpParamMH = tmpParamMHFull(optionsMFA.isIndParams.MH);
     else
         tmpParamMH = tmpParamMHFull(optionsMFA.isIndParams.local);
     end
+    if ~ isreal(tmpParamMH)
+        continue
+    end
         
     %% Check feasibility
     nFailureODE = nFailureODE + 1;    
+    
     [tmpScore, ~, sol] = objfunMH(tmpParamMH);
    
     if tmpScore < 10^12
         params(:,p) = tmpParamMH;
         scores(p) = tmpScore;
-        if rem(p,ceil(popSize/5)) == 0
+        if rem(p,ceil(initPopSize/5)) == 0
             disp(['Initial param#' num2str(p)])
         end
         p = p + 1;
@@ -100,8 +132,7 @@ end
 
 %% Sort paramter sets according to the scores
 [scores, idSort] = sort(scores);
-scores=scores(1:popSize);
-params= params(:,idSort(1:popSize));
+params= params(:,idSort);
 nExpData = sol.nExpData;
 
 end

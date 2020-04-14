@@ -1,7 +1,11 @@
 %% Calculation of residuals
 function [residual, scoreMet, resVec2MDV]= calcResidual(model, expData, optionsMFA, sol)
 
-field2var(optionsMFA.varSet)
+nEvalMDVMets = optionsMFA.varSet.nEvalMDVMets;
+idEvalMDVMets = optionsMFA.varSet.idEvalMDVMets;
+nEvalConcMets = optionsMFA.varSet.nEvalConcMets;
+idEvalConcMets = optionsMFA.varSet.idEvalConcMets;
+nExpTime = optionsMFA.varSet.nExpTime;
 
 idCompTimeSim = zeros(1,length(expData.time));
 for t = 1 : nExpTime

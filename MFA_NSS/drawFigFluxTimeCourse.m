@@ -151,7 +151,7 @@ for r = 1 : nPlotRxns
         ylim([0, ylimData(2)])
     end
     ylimData = ylim;
-    tmpUbFlux = optionsMFA(1).ub.switchTimeFluxes;
+    tmpUbFlux = model.rxnInfo.ubFluxes(idRxnList(r));
     if ylimData(2) >= tmpUbFlux
         ylim([ylimData(1),tmpUbFlux])
     end

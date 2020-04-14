@@ -1,5 +1,5 @@
 %% Draw bar graph of time-averaged regulation coefficient
-function figH = drawRegCoef(regCoefFxn, optionsKA);
+function figH = drawRegCoef(regCoefFxn, optionsKM);
 
 fxnRegulatorNames  = regCoefFxn(1).fxnRegulatorNames;
 legendList = regCoefFxn(1).legendList;

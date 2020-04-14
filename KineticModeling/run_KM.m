@@ -1,15 +1,15 @@
 %% Run identification of effective flux regulators
-function [solFinal, solInit, optionsIEFR] = run_IEFR(expDataKA, optionsIEFR)
-%run_IEFR  run identification of effective flux regulators
+function [solFinal, solInit, optionsKM] = run_KM(expDataKM, optionsKM)
+%run_KM  run kinetic modelling
 % INPUT
-% expDataKA     data structure of flux, substrates, products, phosphorylation, and allsoteric effectors
+% expDataKM     data structure of flux, substrates, products, phosphorylation, and allsoteric effectors
 %        regulatorType      type of regulator
 %                                 either of flux, substrates, products, phospho (phosphorylation), 
 %                                 alloA (allosteric activation), or alloI (allosteric inhibition)
 %        regulatorName     regulator name (e.g., glucose, Gys_S728)
 %        ScoefRegulatorMet   stoichiometric coefficient (applied to only substrates and products)
 %        level       amount of regulator
-% optionsIEFR     options for identification of effective flux regulator
+% optionsKM     options for identification of effective flux regulator
 %
 % OUTPUT
 % solFinal      solution structure after minimization of  AIC
@@ -20,27 +20,27 @@ function [solFinal, solInit, optionsIEFR] = run_IEFR(expDataKA, optionsIEFR)
 %       nExpData        number of input data point
 %       nParam          number of parameters
 %       AIC         Akaike's information criterion
-%       effectiveFluxRegulators         identified effective flux regulators of phosphorylation and allosteric effectors
-%       effectiveFluxRegulatorTypes         type of identified effective flux regulators
+%       selectedRegulatoryMolecules         identified effective flux regulators of phosphorylation and allosteric effectors
+%       selectedRegulatoryMoleculeTypes         type of identified effective flux regulators
 % solInit      solution structure before minimization of AIC
-% optionsIEFR     options where default options, "normExpData" and "paramInfo" are added
+% optionsKM     options where default options, "normExpData" and "paramInfo" are added
 %
-% see example_IEFR.m as an example code.
+% see demo_KM.m as an example code.
 
 
 import packFxnKARAMCAInit.*
 
 %% Load default options
-defaultOptionsKA = loadDefaultOptionsIEFR();
-filedNamesInputOptionsKA= fieldnames(optionsIEFR);
+defaultOptionsKA = loadDefaultOptionsKM();
+filedNamesInputOptionsKA= fieldnames(optionsKM);
 for f = 1 : length(filedNamesInputOptionsKA)
-    defaultOptionsKA.(filedNamesInputOptionsKA{f}) = optionsIEFR.(filedNamesInputOptionsKA{f});
+    defaultOptionsKA.(filedNamesInputOptionsKA{f}) = optionsKM.(filedNamesInputOptionsKA{f});
 end
-optionsIEFR = defaultOptionsKA;
+optionsKM = defaultOptionsKA;
 
 %% Normalize data by the L2 norm
-normExpData= makeNormExpData(expDataKA, optionsIEFR);
-optionsIEFR.normExpData = normExpData;
+normExpData= makeNormExpData(expDataKM, optionsKM);
+optionsKM.normExpData = normExpData;
 
 %% Preparation of parameter information
 paramInfo.paramTypes = {'k1', 'k2', 'Ks', 'Kp', 'Kr'}';
@@ -57,7 +57,7 @@ for p = 1 : length(paramInfo.paramRegulatorTypes)
     end
 end
 paramInfo.paramRegulatorNames = {'kcat+', 'kcat-', normExpData(2:end).regulatorName}';
-optionsIEFR.paramInfo = paramInfo;
+optionsKM.paramInfo = paramInfo;
 
 %% Prepalation of stepwise model selection
 loc = ~ismember({normExpData.regulatorType}, {'flux'});
@@ -67,9 +67,9 @@ regulatorTypes = [{'constant','constant'},{normExpData(2:end).regulatorType}];
 nParam = size(Xall, 2);
 y = normExpData(1).level';
 objfunIter = @(isUseVar) calcScoreIter(...
-    y, Xall, isUseVar, normExpData, optionsIEFR);
+    y, Xall, isUseVar, normExpData, optionsKM);
 objfunStepwiseFit = @(isUserVar) calcScoreStepwiseFit(...
-    objfunIter, isUserVar, optionsIEFR);
+    objfunIter, isUserVar, optionsKM);
 
 %% Set which variable can be selected or not
 % If both lb(i) and ub(i) equal to zero, variable i is never selected. 
@@ -103,17 +103,17 @@ options.lb(isAlwaysAddVar) = 1;
 solInit = solStepwiseInit.sol;
 solInit = rmfield(solInit, {'jacobian', 'optimLocal', 'isUseVar', 'optionsOptimMH', 'optionsOptimLocal', 'y', 'X', 'score'});
 solInit.paramInfo.paramRegulatorTypes = ...
-    optionsIEFR.paramInfo.paramRegulatorTypes(solInit.paramInfo.paramRegulatorTypeIds);
+    optionsKM.paramInfo.paramRegulatorTypes(solInit.paramInfo.paramRegulatorTypeIds);
 solInit.paramInfo.paramRegulatorNames = ...
-    optionsIEFR.paramInfo.paramRegulatorNames(solInit.paramInfo.paramRegulatorNameIds);
+    optionsKM.paramInfo.paramRegulatorNames(solInit.paramInfo.paramRegulatorNameIds);
 
 idEFRNormExpData = solInit.paramInfo.locNormExpData(solInit.paramInfo.isRegParam);
 if isempty(idEFRNormExpData)
-    solInit.effectiveFluxRegulators = {};
-    solInit.effectiveFluxRegulatorTypes = {};
+    solInit.selectedRegulatoryMolecules = {};
+    solInit.selectedRegulatoryMoleculeTypes = {};
 else
-    solInit.effectiveFluxRegulators = {optionsIEFR.normExpData(idEFRNormExpData).regulatorName}';
-    solInit.effectiveFluxRegulatorTypes = {optionsIEFR.normExpData(idEFRNormExpData).regulatorType}';
+    solInit.selectedRegulatoryMolecules = {optionsKM.normExpData(idEFRNormExpData).regulatorName}';
+    solInit.selectedRegulatoryMoleculeTypes = {optionsKM.normExpData(idEFRNormExpData).regulatorType}';
 end
 
 
@@ -121,25 +121,25 @@ end
 solFinal = solStepwiseFinal.sol;
 solFinal = rmfield(solFinal, {'jacobian', 'optimLocal', 'isUseVar', 'optionsOptimMH', 'optionsOptimLocal', 'y', 'X', 'score'});
 solFinal.paramInfo.paramRegulatorTypes = ...
-    optionsIEFR.paramInfo.paramRegulatorTypes(solFinal.paramInfo.paramRegulatorTypeIds);
+    optionsKM.paramInfo.paramRegulatorTypes(solFinal.paramInfo.paramRegulatorTypeIds);
 solFinal.paramInfo.paramRegulatorNames = ...
-    optionsIEFR.paramInfo.paramRegulatorNames(solFinal.paramInfo.paramRegulatorNameIds);
+    optionsKM.paramInfo.paramRegulatorNames(solFinal.paramInfo.paramRegulatorNameIds);
 
 idEFRNormExpData = solFinal.paramInfo.locNormExpData(solFinal.paramInfo.isRegParam);
 if isempty(idEFRNormExpData)
-    solFinal.effectiveFluxRegulators = {};
-    solFinal.effectiveFluxRegulatorTypes = {};
+    solFinal.selectedRegulatoryMolecules = {};
+    solFinal.selectedRegulatoryMoleculeTypes = {};
 else
-    solFinal.effectiveFluxRegulators = {optionsIEFR.normExpData(idEFRNormExpData).regulatorName}';
-    solFinal.effectiveFluxRegulatorTypes = {optionsIEFR.normExpData(idEFRNormExpData).regulatorType}';
+    solFinal.selectedRegulatoryMolecules = {optionsKM.normExpData(idEFRNormExpData).regulatorName}';
+    solFinal.selectedRegulatoryMoleculeTypes = {optionsKM.normExpData(idEFRNormExpData).regulatorType}';
 end
 
 end
 
 %% Run independent parameter estimation
-function [score, sol]= calcScoreStepwiseFit(objfun, isUseVar, optionsIEFR)
+function [score, sol]= calcScoreStepwiseFit(objfun, isUseVar, optionsKM)
 
-nIterOpt = optionsIEFR.nIterOpt;
+nIterOpt = optionsKM.nIterOpt;
 scoresAllIter = zeros(1, nIterOpt);
 solIter = cell(1, nIterOpt);
 for i = 1 : nIterOpt
@@ -153,7 +153,7 @@ sol = solIter{idMin};
 end
 
 %% Calculation of score at each parameter estimation
-function [score, sol] = calcScoreIter(y, X, isUseVar, normExpData, optionsIEFR)
+function [score, sol] = calcScoreIter(y, X, isUseVar, normExpData, optionsKM)
 
 regulatorNames = [{'kcat+','kcat-'},{normExpData(2:end).regulatorName}];
 regulatorTypes = [{'constant','constant'},{normExpData(2:end).regulatorType}];
@@ -162,7 +162,7 @@ nParam = nnz(isUseVar);
 
 %% Information of parameters
 
-paramInfoAll = optionsIEFR.paramInfo;
+paramInfoAll = optionsKM.paramInfo;
 
 paramTypeIds = zeros(nParam, 1);
 paramRegulatorTypeIds = zeros(nParam, 1);
@@ -220,7 +220,7 @@ paramInfo.isRegParam = ismember(paramInfo.paramRegulatorTypeIds, regParamRegulat
 
 
 %% Set bound of parameters
-optionsOpt = optionsIEFR.optionsOpt;
+optionsOpt = optionsKM.optionsOpt;
 optionsOptimMH.popSize = optionsOpt.popSize;
 optionsOptimMH.nMaxEval = optionsOpt.nMaxEval;
 maxAbsVal = optionsOpt.maxAbsVal;
@@ -264,11 +264,11 @@ for p = 1 : nParam
 end
 
 %% Score function
-for p = 1 : length(optionsIEFR.paramInfo.fxnGetOriParam)
-    optionsIEFR.paramInfo.fxnGetOriParam{p} = str2func(optionsIEFR.paramInfo.fxnGetOriParam{p});
+for p = 1 : length(optionsKM.paramInfo.fxnGetOriParam)
+    optionsKM.paramInfo.fxnGetOriParam{p} = str2func(optionsKM.paramInfo.fxnGetOriParam{p});
 end
 
-fxnCalcRes = @(param) calcRes(y, X(:,isUseVar), param, normExpData, paramInfo, optionsIEFR);
+fxnCalcRes = @(param) calcRes(y, X(:,isUseVar), param, normExpData, paramInfo, optionsKM);
 objfunRSS =@(param) calcRSS(param, fxnCalcRes, optionsOpt.infeasibleScore);
 objfunStr = 'calcRSS';
 

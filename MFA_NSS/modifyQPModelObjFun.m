@@ -1,5 +1,5 @@
 %% modify objective function of QP
-function qpModel = modifyQPModelObjFun171221(model, expData, optionsMFA, ...
+function qpModel = modifyQPModelObjFun(model, expData, optionsMFA, ...
     qpModel, isMinVar)
 
 H = qpModel.H;
