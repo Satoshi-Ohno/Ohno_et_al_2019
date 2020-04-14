@@ -26,6 +26,7 @@ Please run demo_IEFR.m in the package. Identification of effective flux regulato
 
 # Contact
 Satoshi Ohno: sohno@bs.s.u-tokyo.ac.jp
+
 Shinya Kuroda: skuroda@bs.s.u-tokyo.ac.jp
 
 # Reference
