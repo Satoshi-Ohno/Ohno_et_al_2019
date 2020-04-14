@@ -1,11 +1,11 @@
 %%  Add constrains for reaction dependent number of time intervals
-function qpModel = modifyQPModelConstrRxnDepNKnots(model, expData, optionsMFA, qpModel, optimType)
-tmpMatConstr=optionsMFA.convertMat.constrFluxNotForOptim;
+function qpModel = modifyQPModelConstrRxnDepNSwitchTimes(model, expData, optionsMFA, qpModel, optimType)
+tmpMatConstr=optionsMFA.transformMat.constrFluxNotForOptim;
 nTmpConstr = size(tmpMatConstr,1);
 tmpAeq1= tmpMatConstr;
 tmpBeq1= zeros(nTmpConstr,1);
 
-tmpMatConstr=optionsMFA.convertMat.constrConcRateNotForOptim;
+tmpMatConstr=optionsMFA.transformMat.constrConcRateNotForOptim;
 nTmpConstr = size(tmpMatConstr,1);
 tmpAeq2= tmpMatConstr;
 tmpBeq2= zeros(nTmpConstr,1);
