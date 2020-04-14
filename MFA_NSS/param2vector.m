@@ -1,5 +1,5 @@
 %% vectorize parameters
-function     paramVector = param2vector171206(...
+function     paramVector = param2vector(...
     paramStruct, optionsMFA, optimType, isLogTransform, isIndParam)
 
 if nargin <= 4
@@ -21,12 +21,17 @@ end
 if isIndParam
     switch optimType
         case {'metaheuristic'}
-            isIndParams = optionsMFA.isIndParams.MH;
+            isIndParamsVec = optionsMFA.isIndParams.MH;
         case {'local', 'init'}
-            isIndParams = optionsMFA.isIndParams.local;
+            isIndParamsVec = optionsMFA.isIndParams.local;
     end
 end
-fieldNamesParam = fieldnames(paramStruct);
+
+if optionsMFA.isUseConcAsParam
+    fieldNamesParam = {'switchTimeConcs', 'initConcRates', 'switchTimeFluxes', 'switchTimes'} ;
+else
+    fieldNamesParam = {'initConcs', 'switchTimeConcRates', 'switchTimeFluxes', 'switchTimes'} ;
+end
 
 %% vectorize parameters
 for f = 1 : length(fieldNamesParam)
@@ -38,23 +43,25 @@ end
 %% log transformation
 if isLogTransform
     for f = 1 : length(fieldNamesParam)
-        if ~strcmp(fieldNamesParam(f), {'switchTimeConcRates'})
+        if ~strcmp(fieldNamesParam(f), {'switchTimeConcRates', 'initConcRates'})
             vecParamStruct.(fieldNamesParam{f}) = log10(vecParamStruct.(fieldNamesParam{f}));
         end
     end
 end
 
 %% Merge parameters
-paramVector = [...
-    vecParamStruct.initConcs;...
-    vecParamStruct.switchTimeConcRates;...
-    vecParamStruct.switchTimeFluxes;...
-    vecParamStruct.switchTimes;...
-    ];
+paramVector = zeros(optionsMFA.idParamLocal.nParam,1);
+ff =0;
+for f = 1 : length(fieldNamesParam)
+    nTmpParam = length(vecParamStruct.(fieldNamesParam{f}));
+    paramVector(ff+(1:nTmpParam)) = vecParamStruct.(fieldNamesParam{f});
+    ff = ff + nTmpParam;
+end
+paramVector = paramVector(1:ff);
 
 %% Select independent parameters
 if isIndParam
-    paramVector = paramVector(isIndParams);
+    paramVector = paramVector(isIndParamsVec);
 end
 
 

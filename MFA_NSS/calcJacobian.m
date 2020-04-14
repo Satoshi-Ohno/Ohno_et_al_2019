@@ -17,7 +17,7 @@ optionsCalcJacobian.resOri2 = resOri2;
 jacobian1 = [];
 jacobian2 = [];
 
-%% jacobian‚ÌŒvŽZ
+%% Calculate Jacobian
 nData1 = length(resOri1);
 diffResMat1 = zeros(nData1, nParam);
 diffParamMat1 = zeros(nData1, nParam);
@@ -61,7 +61,6 @@ for p = 1 : nParam
                     tmpDiffParam2 = zeros(nData2, 1)+0.1;
                 end
             end
-%             return
         end
         
     diffResMat1(:,p) = tmpDiffRes1;
