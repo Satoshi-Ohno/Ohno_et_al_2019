@@ -1,7 +1,7 @@
 # Overview
 Thus far, most studies for metabolic flux estimation have been done under steady state conditions. Few studies have been done under in vivo-like non-steady state conditions because of technical difficulties in both experiments and mathematical modeling. Furthermore, identification of regulation of glucose metabolism by phosphorylation events and allosteric effects is presently inferred from kinetics of isolated enzymes; consequently, which phosphorylation events and allosteric effectors regulate glucose flux in cells remains unknown. We solved these issues by developing novel mathematical approaches using data from phosphoproteomic and 13C-glucose-labelled metabolomic experiments. We applied the developed approach to insulin-stimulated adipocytes (Ohno et al., submitted)
 
-Here we provide the MATLAB source code for ^13C-metabolic flux analysis under non-steady-state and kinetic modelling to identify key regulatory mechanisms for a reaction and relative contributions of these molecules to flux.
+Here we provide the MATLAB source code for 13C-metabolic flux analysis under non-steady-state conditions and kinetic modelling to identify key regulatory mechanisms for a reaction and relative contributions of these molecules to flux.
 
 # Requirements
 The developmental version of package has been tested on the following systems:
