@@ -30,5 +30,5 @@ Satoshi Ohno: sohno@bs.s.u-tokyo.ac.jp
 Shinya Kuroda: skuroda@bs.s.u-tokyo.ac.jp
 
 # Reference
-Satoshi Ohno, Lake-Ee Quek, James R. Krycer, Katsuyuki Yugi, Akiyoshi Hirayama, Satsuki Ikeda, Futaba Shoji, Kumi Suzuki, Tomoyoshi Soga, David E. James, and Shinya Kuroda. Kinetic trans-omic analysis reveals key regulatory mechanisms for insulin-regulated glucose metabolism in adipocytes. Submitted.
-
+Ohno, S., Quek, L.-E., Krycer, J. R., Yugi, K., Hirayama, A., Ikeda, S., Shoji, F., Suzuki, K., Soga, T., James, D. E., & Kuroda, S. (2020). Kinetic Trans-omic Analysis Reveals Key Regulatory Mechanisms for Insulin-Regulated Glucose Metabolism in Adipocytes. iScience, 23(9), 101479. 
+https://doi.org/10.1016/j.isci.2020.101479
